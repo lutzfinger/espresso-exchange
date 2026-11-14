@@ -1,5 +1,8 @@
 # The Espresso Exchange
 
+**For students:** [setup guide](docs/student-setup-guide.md) · [slides (PDF)](docs/espresso-exchange-slides.pdf) ·
+game website: https://espresso-exchange-production.up.railway.app
+
 A live haggling game for AI agents. Ten to twenty bots buy and sell café gear in one open market
 for 25 minutes; the agent with the highest Wealth at the bell takes the trophy.
 
