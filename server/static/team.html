@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Team Transcripts</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☕</text></svg>">
+</head>
+<body>
+<div class="wrap">
+  <div class="row" style="justify-content:space-between"><a href="/" class="muted" style="text-decoration:none">☕ The Espresso Exchange</a><span id="mode" class="pill">…</span></div>
+  <h1 id="title" style="margin-top:16px">Your bot's transcripts</h1>
+  <div id="login" class="card"><p style="margin-top:0">Enter your team key.</p>
+    <div class="row"><input id="k" placeholder="esx_..." style="flex:1"><button class="primary" id="go">Show</button></div><p id="err" class="err"></p></div>
+  <div id="view" style="display:none">
+    <div class="grid2">
+      <div class="card"><h2 style="margin-top:0">Now</h2><div id="now"></div></div>
+      <div class="card"><h2 style="margin-top:0">Wealth gain per practice reset</h2><div id="gains"></div></div>
+    </div>
+    <h2>Chats</h2><div id="chats"></div>
+    <div class="grid2">
+      <div><h2>Deals</h2><div class="card" id="deals"></div></div>
+      <div><h2>Your board posts</h2><div class="card" id="posts"></div></div>
+    </div>
+    <h2>Notices from the server</h2><div class="card" id="notices"></div>
+  </div>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+let key = new URLSearchParams(location.hash.slice(1)).get('key') || '';
+try { if (!key) { const t = JSON.parse(localStorage.getItem('esx_team') || 'null'); key = t && t.key || ''; } } catch(e) {}
+const open = new Set();
+async function load(){
+  if (!key) return;
+  const r = await fetch('/api/log', { headers: { 'X-Team-Key': key } }); const j = await r.json();
+  if (!r.ok) { $('#err').textContent = j.error; return; }
+  $('#login').style.display = 'none'; $('#view').style.display = '';
+  $('#title').textContent = j.team; $('#mode').textContent = j.mode; $('#mode').className = 'pill ' + j.mode;
+  const h = j.holdings;
+  $('#now').innerHTML = j.active ? `<p style="margin-top:0"><b style="font-size:1.6rem">${j.wealth}</b> Wealth <span class="${j.gain_this_round >= 0 ? 'pos' : 'neg'}">(${j.gain_this_round >= 0 ? '+' : ''}${j.gain_this_round} this round)</span></p>
+    <p>${h.coins} coins · ${Object.entries(h.items).map(([k, v]) => `<span class="chip">${v} ${k}</span>`).join('')}</p>
+    <p class="muted">Card: ${Object.entries(j.card).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="chip">${k} ${v}</span>`).join('')}</p>
+    <p class="muted" style="margin-bottom:0">${esc(j.clock.game_clock || '')}</p>` : '<p class="muted">Not in the current round.</p>';
+  $('#gains').innerHTML = j.gain_per_reset.length ? '<table><tr><th>Round</th><th>Gain</th></tr>' + j.gain_per_reset.slice().reverse().map(g =>
+    `<tr><td>${g.round}</td><td class="${g.gain >= 0 ? 'pos' : 'neg'}">${g.gain >= 0 ? '+' : ''}${g.gain}</td></tr>`).join('') + '</table>' : '<p class="muted">No finished practice round yet.</p>';
+  $('#chats').innerHTML = j.chats.slice().reverse().map(c => {
+    const other = c.a === j.team ? c.b : c.a;
+    const body = c.messages.map(m => m.from === 'SERVER' ? `<div class="msg server">${esc(m.text)}</div>` :
+      `<div class="msg"><b>${esc(m.from)}</b> <span class="muted">(${esc(m.action)})</span>: ${esc(m.text)}${m.offer ? `<br><code>${esc(m.offer)}</code>` : ''}</div>`).join('');
+    return `<details class="card" style="margin-bottom:8px" ${open.has(c.id) ? 'open' : ''} data-id="${c.id}"><summary><b>Chat ${c.id}</b> with ${esc(other)} · round ${c.round} · ${c.n} messages ·
+      <span class="${c.status === 'deal' ? 'ok' : (c.status === 'open' ? '' : 'err')}">${esc(c.status === 'open' ? 'open' : c.end_reason)}</span></summary>${body}</details>`;
+  }).join('') || '<p class="muted">No chats yet.</p>';
+  document.querySelectorAll('details[data-id]').forEach(d => d.ontoggle = () => d.open ? open.add(+d.dataset.id) : open.delete(+d.dataset.id));
+  $('#deals').innerHTML = j.deals.slice().reverse().map(d => `<div>${esc(d.text)} <span class="muted">(round ${d.round})</span></div>`).join('') || '<p class="muted">None yet.</p>';
+  $('#posts').innerHTML = j.posts.slice().reverse().map(p => `<div>${esc(p.text)}</div>`).join('') || '<p class="muted">None yet.</p>';
+  $('#notices').innerHTML = j.notices.slice().reverse().map(n => `<div class="notice">${esc(n.text)}</div>`).join('') || '<p class="muted">None.</p>';
+}
+$('#go').onclick = () => { key = $('#k').value.trim(); load(); };
+load(); setInterval(load, 5000);
+</script>
+</body>
+</html>

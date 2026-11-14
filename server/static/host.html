@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exchange Host Panel</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☕</text></svg>">
+</head>
+<body>
+<div class="wrap">
+  <div class="row" style="justify-content:space-between"><h1 style="margin:0">Host panel</h1><span class="row"><span id="mode" class="pill">…</span><b id="clock"></b></span></div>
+  <div id="login" class="card" style="margin-top:16px">
+    <p style="margin-top:0">Enter the host key (Railway → your service → Variables → <code>HOST_KEY</code>).</p>
+    <div class="row"><input id="hk" type="password" placeholder="host key" style="flex:1"><button class="primary" id="go">Open</button></div>
+    <p id="loginerr" class="err"></p>
+  </div>
+  <div id="panel" style="display:none">
+    <div class="grid2" style="margin-top:16px">
+      <div class="card">
+        <h2 style="margin-top:0">Game</h2>
+        <div class="row">
+          <button class="primary" data-act="start_game" data-confirm="Start the game? Practice ends, registration closes, new hands are dealt.">Start game</button>
+          <button data-act="extend" data-body='{"minutes":1}'>+1 minute</button>
+          <button class="danger" data-act="bell" data-confirm="Ring the bell now? All chats end.">Ring bell now</button>
+          <button data-act="reveal">Reveal</button>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button data-act="practice" data-confirm="Switch back to practice mode? Any running game ends without a reveal.">Back to practice</button>
+          <button data-act="reset">New practice round</button>
+          <button id="reg">Registration</button>
+          <button class="danger" data-act="wipe" data-body='{"confirm":"WIPE"}' data-confirm="Remove EVERY team and invalidate all keys? Use this once before the event.">Wipe all teams</button>
+        </div>
+        <p class="muted" style="margin-bottom:0">Projector screen with chat words: <a id="screenlink" target="_blank">open on the projector</a>. It carries the screen key; the page hides it from the address bar. Everyone else's <a href="/screen" target="_blank">/screen</a> shows Wealth, deals and who chats with whom, but no chat words until the reveal (or set <b>public chats</b> below).</p>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0">HOUSE notice</h2>
+        <textarea id="notice" rows="2" placeholder="Shown on the board and the screen; empty clears the banner"></textarea>
+        <div class="row" style="margin-top:8px"><button class="primary" id="sendnotice">Post notice</button>
+          <a class="btn" id="exp">Export logs (JSON)</a><a class="btn" id="tr">Transcripts</a></div>
+      </div>
+    </div>
+    <h2>Teams</h2>
+    <div class="card" style="overflow-x:auto"><table id="teams"></table></div>
+    <h2>Parameters</h2>
+    <div class="card"><form id="cfg" class="grid2"></form><div class="row" style="margin-top:10px"><button class="primary" id="savecfg">Save parameters</button><button id="defaults">Reset to defaults</button><span id="cfgmsg"></span></div></div>
+    <h2>Last result</h2>
+    <div class="card"><div id="final" class="muted">No game finished yet.</div></div>
+  </div>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+let hk = ''; try { hk = sessionStorage.getItem('esx_host') || ''; } catch(e) {}
+let st = null, cfgDrawn = false;
+async function api(path, opts={}) {
+  const r = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', 'X-Host-Key': hk } });
+  const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j;
+}
+function render(){
+  $('#mode').textContent = st.mode; $('#mode').className = 'pill ' + st.mode;
+  $('#clock').textContent = st.clock.game_clock || '';
+  $('#reg').textContent = st.registration_open ? 'Close registration' : 'Open registration';
+  $('#screenlink').href = '/screen#k=' + encodeURIComponent(st.screen_key || '');
+  $('#teams').innerHTML = '<tr><th>Team</th><th>Key</th><th>Active</th><th>Wealth</th><th>Chats</th><th>Last seen</th><th></th></tr>' +
+    st.teams.map(t => `<tr><td>${esc(t.name)}${t.house ? ' <span class="chip">house</span>' : ''}</td>
+      <td>${t.house ? '' : `<code style="font-size:.72rem">${esc(t.key)}</code>`}</td><td>${t.active ? '✓' : ''}</td>
+      <td>${t.wealth ?? ''}</td><td>${t.open_chats}</td><td>${t.last_seen_s == null ? 'never' : t.last_seen_s + 's ago'}</td>
+      <td>${t.house ? '' : `<button data-remove="${esc(t.name)}">Remove</button>`}</td></tr>`).join('');
+  document.querySelectorAll('[data-remove]').forEach(b => b.onclick = async () => {
+    if (!confirm('Remove ' + b.dataset.remove + '?')) return; st = await api('/api/host/remove', { method: 'POST', body: JSON.stringify({ team: b.dataset.remove }) }); render(); });
+  if (!cfgDrawn) { cfgDrawn = true;
+    $('#cfg').innerHTML = Object.entries(st.config).map(([k, v]) => `<label>${esc(k.replaceAll('_', ' '))}<br>${typeof v === 'boolean'
+      ? `<select name="${k}"><option ${v ? 'selected' : ''}>true</option><option ${v ? '' : 'selected'}>false</option></select>`
+      : `<input name="${k}" value="${v}">`}</label>`).join(''); }
+  if (st.final) $('#final').innerHTML = '<ol>' + st.final.standings.map(s => `<li>${esc(s.name)}: <b>${s.wealth}</b> (${s.coins} coins)</li>`).join('') + '</ol>';
+  $('#exp').href = '/api/host/export?key=' + encodeURIComponent(hk);
+  $('#tr').href = '/api/transcripts?key=' + encodeURIComponent(hk);
+}
+async function refresh(){
+  if (!hk) return;
+  try { st = await api('/api/host/state'); $('#login').style.display = 'none'; $('#panel').style.display = ''; render(); }
+  catch (e) { $('#loginerr').textContent = e.message; $('#login').style.display = ''; $('#panel').style.display = 'none'; }
+}
+$('#go').onclick = () => { hk = $('#hk').value.trim(); try { sessionStorage.setItem('esx_host', hk); } catch(e) {} refresh(); };
+document.querySelectorAll('[data-act]').forEach(b => b.onclick = async () => {
+  if (b.dataset.confirm && !confirm(b.dataset.confirm)) return;
+  try { st = await api('/api/host/' + b.dataset.act, { method: 'POST', body: b.dataset.body || '{}' }); render(); } catch (e) { alert(e.message); }
+});
+$('#reg').onclick = async () => { st = await api('/api/host/registration', { method: 'POST', body: JSON.stringify({ open: !st.registration_open }) }); render(); };
+$('#sendnotice').onclick = async () => { st = await api('/api/host/notice', { method: 'POST', body: JSON.stringify({ text: $('#notice').value }) }); $('#notice').value = ''; render(); };
+$('#savecfg').onclick = async () => {
+  const body = {}; new FormData($('#cfg')).forEach((v, k) => body[k] = v);
+  try { st = await api('/api/host/config', { method: 'POST', body: JSON.stringify(body) }); $('#cfgmsg').innerHTML = '<span class="ok">Saved.</span>'; }
+  catch (e) { $('#cfgmsg').innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+};
+$('#defaults').onclick = async () => { if (!confirm('Reset every parameter to its default?')) return;
+  st = await api('/api/host/defaults', { method: 'POST', body: '{}' }); cfgDrawn = false; render(); };
+refresh(); setInterval(refresh, 2000);
+</script>
+</body>
+</html>

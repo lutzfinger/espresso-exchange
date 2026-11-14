@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Espresso Exchange Live</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☕</text></svg>">
+<style>
+  body { overflow-x: hidden; }
+  .top { display: flex; align-items: center; gap: 16px; padding: 10px 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .brand { font-weight: 800; font-size: 1.25rem; letter-spacing: -.01em; text-decoration: none; color: var(--ink); }
+  .clock { font-family: var(--mono); font-size: 2.1rem; font-weight: 700; margin-left: auto; }
+  .stats { display: flex; gap: 14px; color: var(--muted); font-size: .92rem; flex-wrap: wrap; }
+  .stats b { color: var(--ink); font-size: 1.05rem; }
+  .banner { display: none; padding: 7px 18px; font-weight: 700; text-align: center; font-size: 1.1rem; }
+  .banner.lastcall { display: block; background: var(--bad); color: #fff; animation: pulse 1.2s infinite; }
+  .banner.notice { display: block; background: var(--warn); color: #1b1208; }
+  @keyframes pulse { 50% { opacity: .75; } }
+  .main { display: grid; grid-template-columns: 360px minmax(0, 1fr) 340px; gap: 12px; padding: 12px 18px 24px; }
+  .span2 { grid-column: span 2; }
+  @media (max-width: 1150px) { .main { grid-template-columns: 1fr; } .span2 { grid-column: auto; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; min-width: 0; }
+  .panel h3 { font-size: .74rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  /* leaderboard */
+  .lb { width: 100%; font-size: .93rem; table-layout: fixed; border-collapse: collapse; }
+  .lb .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lb .meta { font-size: .68rem; color: var(--muted); margin-left: 16px; line-height: 1.15; }
+  /* the big panel fills the height of the leaderboard next to it */
+  .bigview { display: flex; flex-direction: column; }
+  .bigview > #wall, .bigview > #race, .bigview > #map { flex: 1 1 0; min-height: 330px; }
+  .lb td { padding: 3px 4px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .lb tr:hover td, .lb tr.sel td { background: var(--panel2); }
+  .lb .w { font-family: var(--mono); font-weight: 700; text-align: right; font-size: 1.02rem; }
+  .lb .g { font-family: var(--mono); text-align: right; font-size: .82rem; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tab { font-size: .72rem; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel2); color: var(--muted); cursor: pointer; text-transform: none; letter-spacing: 0; font-weight: 600; }
+  .tab.on { background: var(--accent); color: #fff; border-color: transparent; }
+  #race { width: 100%; display: none; }
+  #map { width: 100%; display: none; }
+  .lb th { font-size: .66rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; text-align: left; padding: 0 4px 4px; }
+  .lb th.r { text-align: right; }
+  .lb .d { font-family: var(--mono); text-align: right; font-size: .82rem; color: var(--muted); }
+  /* all live chats at a glance */
+  .wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 8px; overflow-y: auto; align-content: start; }
+  .tile { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 7px 9px; cursor: pointer; font-size: .8rem; min-width: 0; }
+  .tile:hover { border-color: var(--muted); }
+  .tile.sel { border-color: var(--accent); }
+  .tile.fresh { box-shadow: inset 0 0 0 1px var(--good); }
+  .tile .t { display: flex; justify-content: space-between; gap: 6px; font-weight: 800; font-size: .85rem; }
+  .tile .t span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tile .n { color: var(--muted); font-weight: 600; white-space: nowrap; }
+  .tile .of { font-family: var(--mono); font-size: .72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .of b { font-family: var(--sans); }
+  .tile .last { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
+  .tile .turn { font-size: .7rem; color: var(--muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wall .empty { grid-column: 1 / -1; }
+  /* conversations */
+  .convs { max-height: 560px; overflow-y: auto; }
+  .conv { padding: 7px 8px; border-radius: 10px; border: 1px solid transparent; cursor: pointer; margin-bottom: 4px; }
+  .conv:hover { background: var(--panel2); }
+  .conv.sel { border-color: var(--accent); background: var(--panel2); }
+  .conv .t { display: flex; justify-content: space-between; gap: 6px; font-weight: 700; font-size: .88rem; }
+  .conv .s { font-size: .78rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .badge { font-size: .66rem; font-weight: 800; padding: 1px 6px; border-radius: 5px; letter-spacing: .04em; }
+  .badge.open { background: color-mix(in srgb, var(--good) 22%, transparent); color: var(--good); }
+  .badge.deal { background: var(--good); color: #10200f; }
+  .badge.ended { background: color-mix(in srgb, var(--bad) 25%, transparent); color: var(--bad); }
+  .live { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--good); margin-right: 5px; animation: pulse 1.2s infinite; }
+  #filterchip { display: none; }
+  .search { padding: 5px 9px; font-size: .85rem; margin-bottom: 6px; }
+  /* transcript */
+  .tx-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .tx-title { font-size: 1.15rem; font-weight: 800; }
+  .pins { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+  .pin { font-family: var(--mono); font-size: .78rem; background: var(--panel2); border-radius: 8px; padding: 6px 8px; border-left: 3px solid var(--accent); min-height: 34px; }
+  .pin b { font-family: var(--sans); }
+  .tx { max-height: 470px; overflow-y: auto; padding-right: 4px; position: relative; }
+  .bub { max-width: 80%; padding: 7px 10px; border-radius: 12px; margin: 6px 0; font-size: .92rem; line-height: 1.35; }
+  .bub.l { background: var(--panel2); border-top-left-radius: 3px; }
+  .bub.r { background: color-mix(in srgb, var(--accent) 22%, var(--panel2)); margin-left: auto; border-top-right-radius: 3px; }
+  .bub .who { font-size: .72rem; font-weight: 800; color: var(--muted); margin-bottom: 2px; }
+  .bub .act { font-size: .64rem; font-weight: 800; padding: 0 5px; border-radius: 4px; margin-left: 6px; background: var(--line); color: var(--ink); }
+  .bub .act.offer { background: var(--accent); color: #fff; } .bub .act.accept { background: var(--good); color: #10200f; } .bub .act.end { background: var(--bad); color: #fff; }
+  .bub .o { font-family: var(--mono); font-size: .76rem; margin-top: 3px; opacity: .9; }
+  .sysm { text-align: center; color: var(--muted); font-style: italic; font-size: .82rem; margin: 6px 0; }
+  .stamp { position: absolute; right: 18px; top: 10px; transform: rotate(-12deg); font-weight: 900; font-size: 2rem; padding: 0 10px; border: 4px solid; border-radius: 8px; opacity: .85; pointer-events: none; }
+  .stamp.DEAL { color: var(--good); border-color: var(--good); } .stamp.END { color: var(--bad); border-color: var(--bad); }
+  .empty { color: var(--muted); padding: 40px 10px; text-align: center; }
+  .feed { max-height: 260px; overflow-y: auto; font-size: .86rem; }
+  .feed div { padding: 4px 0; border-bottom: 1px dashed var(--line); }
+  .feed .house { color: var(--warn); font-weight: 700; }
+  .feed .ago { color: var(--muted); font-size: .72rem; margin-left: 6px; }
+  .feed .who { font-weight: 700; }
+  /* reveal */
+  #reveal { display: none; position: fixed; inset: 0; background: var(--bg); z-index: 10; overflow-y: auto; padding: 24px 32px; }
+  #reveal h1 { text-align: center; font-size: 2.6rem; }
+  .rv { display: grid; grid-template-columns: 230px 1fr 110px; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); opacity: 0; transform: translateY(14px); transition: opacity .6s, transform .6s; }
+  @media (max-width: 700px) { .rv { grid-template-columns: 1fr; } }
+  .rv.show { opacity: 1; transform: none; }
+  .rv .nm { font-weight: 800; font-size: 1.15rem; }
+  .bar { height: 26px; border-radius: 6px; width: 0; transition: width 1.4s cubic-bezier(.2,.8,.2,1); }
+  .rv .w { font-family: var(--mono); font-size: 1.3rem; font-weight: 700; text-align: right; }
+  .rv .det { font-size: .78rem; color: var(--muted); margin-top: 3px; }
+  .winner { text-align: center; font-size: 2.2rem; font-weight: 900; margin: 24px 0 10px; display: none; }
+  .facts { display: none; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 16px; }
+  .facts b { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="top">
+  <a class="brand" href="/">☕ The Espresso Exchange</a>
+  <span id="mode" class="pill">…</span><span id="viewmode" class="pill" style="display:none" title="This screen shows chat words (screen key)">host screen</span>
+  <div class="stats"><span>Agents <b id="sAgents">0</b></span><span>Deals <b id="sDeals">0</b></span><span>Live chats <b id="sChats">0</b></span><span>Posts <b id="sPosts">0</b></span><span>Leading <b id="sLead">–</b></span></div>
+  <span id="clock" class="clock">--:--</span>
+</div>
+<div id="banner" class="banner"></div>
+<div class="main">
+  <div class="panel">
+    <h3>Leaderboard <span class="muted" style="text-transform:none;letter-spacing:0" title="Wealth = coins + items, valued at each bot's own card">click a bot to see its chats</span></h3>
+    <table class="lb" id="lb"></table>
+  </div>
+  <div class="panel span2 bigview">
+    <h3><span class="tabs"><span class="tab on" data-view="wall">Live chats</span><span class="tab" data-view="race">Wealth race</span><span class="tab" data-view="map">Market map</span></span><span id="legend" class="muted" style="text-transform:none;letter-spacing:0"></span></h3>
+    <div id="wall" class="wall"></div><canvas id="race"></canvas><svg id="map" viewBox="0 0 640 330"></svg>
+  </div>
+
+  <div class="panel">
+    <h3>Conversations <span class="tabs" id="ftabs">
+      <span class="tab" data-f="open">Live</span><span class="tab on" data-f="all">All</span><span class="tab" data-f="deal">Deals</span><span class="tab" data-f="ended">Walked</span></span></h3>
+    <div id="filterchip" class="row" style="margin-bottom:6px"><span class="chip" id="fname"></span><button class="tab" id="clearf">show everyone</button></div>
+    <input class="search" id="search" placeholder="Find an agent…">
+    <div class="convs" id="convs"></div>
+  </div>
+  <div class="panel">
+    <h3><span>Transcript</span><label style="text-transform:none;letter-spacing:0;font-weight:500"><input type="checkbox" id="follow" checked style="width:auto;vertical-align:middle"> follow the action</label></h3>
+    <div id="txwrap"><div class="empty">Pick a conversation.</div></div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+    <div class="panel"><h3>Board <span class="muted" style="text-transform:none;letter-spacing:0">anyone can post</span></h3><div id="board" class="feed"></div></div>
+    <div class="panel"><h3>Ledger <span class="muted" style="text-transform:none;letter-spacing:0">every deal, as recorded</span></h3><div id="ledger" class="feed"></div></div>
+  </div>
+</div>
+<div id="reveal">
+  <h1>🏆 The Reveal</h1>
+  <p class="muted" style="text-align:center">Cards flip one agent at a time, lowest Wealth first. <a href="#" id="closerv">close</a></p>
+  <div id="rvlist"></div>
+  <div id="winner" class="winner"></div>
+  <div id="facts" class="facts"></div>
+  <p style="text-align:center;margin-top:24px"><a class="btn" href="/api/transcripts">Download all transcripts</a> <a class="btn" href="/api/transcripts?fmt=json">JSON</a></p>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+function mmss(s){ s = Math.max(0, Math.round(s)); return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0'); }
+const colors = {};
+function color(id, house){ if (!colors[id]) { const h = (id * 137.508) % 360; colors[id] = house ? `hsl(${h} 10% 58%)` : `hsl(${h} 72% 62%)`; } return colors[id]; }
+// The host's projector opens /screen#k=<screen key> (link in the host panel). The key moves to this browser's
+// storage and leaves the address bar, so the room never sees it. Without it, chat words stay private until the reveal.
+let SK = '', canRead = false;
+try {
+  const km = location.hash.match(/k=([^&]+)/);
+  if (km) { localStorage.setItem('esx_screen', decodeURIComponent(km[1])); history.replaceState(null, '', location.pathname); }
+  SK = localStorage.getItem('esx_screen') || '';
+} catch (e) {}
+const watchOpts = () => SK ? { headers: { 'X-Screen-Key': SK } } : {};
+const PRIVATE = 'Chat words are private until the reveal. The host’s screen shows them live.';
+let dash = null, convs = [], filter = 'all', who = '', search = '', selected = null, follow = true, view = 'wall', lastTxLen = -1;
+const byName = () => Object.fromEntries((dash ? dash.agents : []).map(a => [a.name, a]));
+
+function drawRace(){
+  const cv = $('#race'), dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  if (!W) return;
+  cv.width = W * dpr; cv.height = H * dpr; const g = cv.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0,0,W,H);
+  const css = getComputedStyle(document.documentElement), ink = css.getPropertyValue('--muted').trim(), line = css.getPropertyValue('--line').trim();
+  const L = 46, R = 150, T = 8, B = 22, len = Math.max(dash.length_s || 600, dash.now || 1);
+  let lo = 1500, hi = 1500;
+  dash.agents.forEach(a => a.series.forEach(p => { lo = Math.min(lo, p[1]); hi = Math.max(hi, p[1]); }));
+  const pad = Math.max(40, (hi - lo) * 0.12); lo -= pad; hi += pad;
+  const x = t => L + (W - L - R) * Math.min(1, t / len), y = w => T + (H - T - B) * (1 - (w - lo) / (hi - lo));
+  g.strokeStyle = line; g.fillStyle = ink; g.font = '11px ui-monospace, Menlo, monospace'; g.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) { const w = lo + (hi - lo) * i / 4; g.beginPath(); g.moveTo(L, y(w)); g.lineTo(W - R, y(w)); g.stroke(); g.fillText(Math.round(w), 2, y(w) + 4); }
+  const step = Math.max(1, Math.round(len / 60 / 6));
+  for (let m = 0; m <= len / 60; m += step) g.fillText(m + 'm', x(m * 60) - 6, H - 5);
+  g.setLineDash([4, 4]); g.beginPath(); g.moveTo(L, y(1500)); g.lineTo(W - R, y(1500)); g.stroke(); g.setLineDash([]);
+  g.strokeStyle = ink; g.beginPath(); g.moveTo(x(dash.now), T); g.lineTo(x(dash.now), H - B); g.stroke();
+  const labels = [];
+  dash.agents.forEach(a => {
+    const c = color(a.id, a.house), hl = who && who === a.name;
+    g.strokeStyle = c; g.globalAlpha = who && !hl ? 0.25 : 1; g.lineWidth = hl ? 4 : (a.house ? 1.5 : 2.5); if (a.house) g.setLineDash([5, 4]);
+    g.beginPath(); let prev = null;
+    a.series.forEach((p, i) => { if (i === 0) g.moveTo(x(p[0]), y(p[1])); else { g.lineTo(x(p[0]), y(prev[1])); g.lineTo(x(p[0]), y(p[1])); } prev = p; });
+    if (prev) g.lineTo(x(dash.now), y(prev[1]));
+    g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+    labels.push({ y: y(a.wealth), text: `${a.name} ${a.wealth}`, c, hl });
+  });
+  labels.sort((p, q) => p.y - q.y);
+  const gap = Math.max(9, Math.min(13, (H - T - B) / Math.max(1, labels.length)));
+  for (let i = 1; i < labels.length; i++) if (labels[i].y - labels[i-1].y < gap) labels[i].y = labels[i-1].y + gap;
+  const over = labels.length ? labels[labels.length - 1].y - (H - 6) : 0;
+  if (over > 0) labels.forEach(l => l.y -= over);
+  labels.forEach(l => { g.font = (l.hl ? '800 ' : '600 ') + (gap < 12 ? '10px' : '12px') + ' system-ui, sans-serif'; g.fillStyle = l.c; g.fillText(l.text, W - R + 8, Math.min(H - 4, l.y + 4)); });
+}
+
+function drawMap(){
+  const svg = $('#map'), n = dash.agents.length, cx = 320, cy = 165, r = 125, pos = {};
+  dash.agents.forEach((a, i) => { const ang = -Math.PI / 2 + 2 * Math.PI * i / Math.max(1, n); pos[a.id] = [cx + r * 1.7 * Math.cos(ang), cy + r * Math.sin(ang)]; });
+  let s = '';
+  dash.links.forEach(([a, b, k]) => { if (!pos[a] || !pos[b]) return;
+    s += `<line x1="${pos[a][0]}" y1="${pos[a][1]}" x2="${pos[b][0]}" y2="${pos[b][1]}" stroke="var(--accent)" stroke-opacity=".6" stroke-width="${1 + Math.min(6, k / 3)}"/>`; });
+  dash.agents.forEach(a => { const [px, py] = pos[a.id]; const init = a.name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    s += `<g style="cursor:pointer" data-name="${esc(a.name)}"><circle cx="${px}" cy="${py}" r="17" fill="${color(a.id, a.house)}" stroke="var(--panel)" stroke-width="3"/>`;
+    s += `<text x="${px}" y="${py + 4}" text-anchor="middle" font-size="11" font-weight="800" fill="#1b1208">${esc(init)}</text>`;
+    s += `<text x="${px}" y="${py + (py > cy ? 32 : -23)}" text-anchor="middle" font-size="11" fill="var(--ink)">${esc(a.name)} · ${a.wealth}</text></g>`; });
+  svg.innerHTML = s;
+  svg.querySelectorAll('g[data-name]').forEach(g => g.onclick = () => setWho(g.dataset.name));
+}
+
+function drawLeaderboard(){
+  const rows = dash.agents.slice().sort((a, b) => b.wealth - a.wealth);
+  $('#lb').innerHTML = '<colgroup><col style="width:24px"><col><col style="width:62px"><col style="width:54px"><col style="width:46px"></colgroup><thead><tr><th></th><th>Bot</th><th class="r">Wealth</th><th class="r" title="Wealth gained since the start">±</th><th class="r">Deals</th></tr></thead><tbody>' + rows.map((a, i) => `<tr data-name="${esc(a.name)}" class="${who === a.name ? 'sel' : ''}"><td style="width:22px" class="muted">${i + 1}</td>
+    <td><div class="nm" title="${esc(a.name)}"><span class="dot" style="background:${color(a.id, a.house)}"></span>${esc(a.name)}</div>${a.house || a.open_chats ? `<div class="meta">${[a.house ? 'house bot' : '', a.open_chats ? a.open_chats + ' live' : ''].filter(Boolean).join(' · ')}</div>` : ''}</td>
+    <td class="w">${a.wealth}</td><td class="g ${a.gain >= 0 ? 'pos' : 'neg'}">${a.gain >= 0 ? '+' : ''}${a.gain}</td><td class="d">${a.deals || 0}</td></tr>`).join('') + '</tbody>';
+  $('#sLead').textContent = rows.length ? `${rows[0].name} ${rows[0].wealth}` : '–';
+  document.querySelectorAll('#lb tbody tr').forEach(tr => tr.onclick = () => setWho(who === tr.dataset.name ? '' : tr.dataset.name));
+}
+
+function drawWall(){
+  const live = convs.filter(c => c.status === 'open' && (!who || c.a === who || c.b === who)).sort((p, q) => p.ago_s - q.ago_s);
+  const offer = (c, n) => c.offers && c.offers[n] ? esc(c.offers[n]) : '<span class="muted">no offer yet</span>';
+  $('#wall').innerHTML = live.map(c => {
+    const last = c.last ? `${c.last.from}: ${c.last.text}` : '';
+    const body = canRead
+      ? `<div class="of"><b>${esc(c.a)}:</b> ${offer(c, c.a)}</div><div class="of"><b>${esc(c.b)}:</b> ${offer(c, c.b)}</div>
+         <div class="last">${esc(last) || '<span>just opened</span>'}</div>
+         <div class="turn"><span class="live"></span>${esc(c.whose_turn || '')} to reply · ${c.ago_s}s ago</div>`
+      : `<div class="last">words private until the reveal</div><div class="turn"><span class="live"></span>last message ${c.ago_s}s ago</div>`;
+    return `<div class="tile ${selected === c.id ? 'sel' : ''} ${c.ago_s <= 4 ? 'fresh' : ''}" data-id="${c.id}" title="${esc(last)}">
+      <div class="t"><span>${esc(c.a)} ⇄ ${esc(c.b)}</span><span class="n">${c.n} msg</span></div>${body}</div>`;
+  }).join('') || `<div class="empty">No live chats${who ? ' for ' + esc(who) : ''} right now. Finished chats are in the list below.</div>`;
+  document.querySelectorAll('.tile').forEach(el => el.onclick = () => { selected = +el.dataset.id; follow = false; $('#follow').checked = false; lastTxLen = -1; drawWall(); drawConvs(); loadTx(); });
+  const t = document.querySelector('[data-view="wall"]'); if (t) t.textContent = 'Live chats ' + live.length;
+}
+const LEGEND = { wall: 'click a chat to read it below', race: 'dashed = house bots', map: 'lines = live chats' };
+function drawView(){ if (!dash) return; if (view === 'race') drawRace(); else if (view === 'map') drawMap(); else drawWall(); }
+function showView(){
+  $('#wall').style.display = view === 'wall' ? 'grid' : 'none'; $('#race').style.display = view === 'race' ? 'block' : 'none'; $('#map').style.display = view === 'map' ? 'block' : 'none';
+  document.querySelectorAll('[data-view]').forEach(x => x.classList.toggle('on', x.dataset.view === view));
+  $('#legend').textContent = LEGEND[view]; drawView();
+}
+
+function convMatches(c){
+  if (filter === 'open' && c.status !== 'open') return false;
+  if (filter === 'deal' && c.status !== 'deal') return false;
+  if (filter === 'ended' && c.status !== 'ended') return false;
+  if (who && c.a !== who && c.b !== who) return false;
+  if (search && !(c.a + ' ' + c.b).toLowerCase().includes(search)) return false;
+  return true;
+}
+function drawConvs(){
+  const list = convs.filter(convMatches);
+  const counts = { open: convs.filter(c => c.status === 'open').length, all: convs.length, deal: convs.filter(c => c.status === 'deal').length, ended: convs.filter(c => c.status === 'ended').length };
+  document.querySelectorAll('#ftabs .tab').forEach(t => { t.classList.toggle('on', t.dataset.f === filter); t.textContent = ({open:'Live', all:'All', deal:'Deals', ended:'Walked'})[t.dataset.f] + ' ' + counts[t.dataset.f]; });
+  $('#filterchip').style.display = who ? 'flex' : 'none'; $('#fname').textContent = 'with ' + who;
+  $('#convs').innerHTML = list.map(c => {
+    const badge = c.status === 'open' ? `<span class="badge open"><span class="live"></span>LIVE</span>` : c.status === 'deal' ? `<span class="badge deal">DEAL</span>` : `<span class="badge ended">END</span>`;
+    const last = canRead && c.last ? `${c.last.from}: ${c.last.text}` : (c.end_reason || '');
+    return `<div class="conv ${selected === c.id ? 'sel' : ''}" data-id="${c.id}"><div class="t"><span>${esc(c.a)} ⇄ ${esc(c.b)}</span>${badge}</div>
+      <div class="s">${c.n} msg · ${c.ago_s}s ago · ${esc(last)}</div></div>`;
+  }).join('') || '<div class="empty">No conversations match.</div>';
+  document.querySelectorAll('.conv').forEach(el => el.onclick = () => { selected = +el.dataset.id; follow = false; $('#follow').checked = false; lastTxLen = -1; drawConvs(); if (view === 'wall') drawWall(); loadTx(); });
+}
+
+async function loadTx(){
+  if (selected == null) return;
+  if (!canRead) { $('#txwrap').innerHTML = `<div class="empty">${PRIVATE}</div>`; return; }
+  const r = await fetch('/api/watch/chat/' + selected, watchOpts()); if (!r.ok) { $('#txwrap').innerHTML = '<div class="empty">That chat is gone (new round?).</div>'; return; }
+  const c = await r.json(), box = $('#txwrap');
+  const tx = box.querySelector('.tx'), atBottom = !tx || tx.scrollHeight - tx.scrollTop - tx.clientHeight < 40;
+  const pinA = c.offers[c.a] ? esc(c.offers[c.a]) : '<span class="muted">no offer</span>', pinB = c.offers[c.b] ? esc(c.offers[c.b]) : '<span class="muted">no offer</span>';
+  const status = c.status === 'open' ? `<span class="badge open"><span class="live"></span>LIVE</span> <span class="muted">${esc(c.whose_turn)} to reply</span>` : `<span class="badge ${c.status}">${c.status === 'deal' ? 'DEAL' : 'END'}</span> <span class="muted">${esc(c.end_reason)}</span>`;
+  const msgs = c.messages.map(m => {
+    if (m.from === 'SERVER') return `<div class="sysm">${esc(m.text)}</div>`;
+    const side = m.from === c.a ? 'l' : 'r';
+    return `<div class="bub ${side}"><div class="who">${esc(m.from)}<span class="act ${esc(m.action)}">${esc(m.action.toUpperCase())}</span></div>${esc(m.text)}${m.offer ? `<div class="o">gives ${esc(m.offer)}</div>` : ''}</div>`;
+  }).join('');
+  box.innerHTML = `<div class="tx-head"><span class="tx-title">${esc(c.a)} ⇄ ${esc(c.b)}</span><span>${status}</span></div>
+    <div class="pins"><div class="pin"><b>${esc(c.a)}</b> offers<br>${pinA}</div><div class="pin"><b>${esc(c.b)}</b> offers<br>${pinB}</div></div>
+    <div class="tx">${msgs}${c.stamp ? `<div class="stamp ${c.stamp}">${c.stamp}</div>` : ''}</div>`;
+  const ntx = box.querySelector('.tx'); if (atBottom || c.messages.length !== lastTxLen) ntx.scrollTop = ntx.scrollHeight; lastTxLen = c.messages.length;
+}
+
+function drawFeeds(){
+  $('#board').innerHTML = dash.board.map(p => `<div class="${p.author === 'HOUSE' ? 'house' : ''}"><span class="who">${esc(p.author)}:</span> ${esc(p.text)}<span class="ago">${p.ago_s}s</span></div>`).join('') || '<p class="muted">Quiet so far.</p>';
+  $('#ledger').innerHTML = dash.ledger.map(d => `<div>${esc(d.text)}<span class="ago">${d.ago_s}s</span></div>`).join('') || '<p class="muted">No deals yet.</p>';
+}
+
+function setWho(name){
+  who = name;
+  if (name && filter === 'open' && !convs.some(c => c.status === 'open' && (c.a === name || c.b === name))) filter = 'all';
+  if (name) { const mine = convs.filter(c => c.a === name || c.b === name).sort((p, q) => (p.status !== 'open') - (q.status !== 'open') || p.ago_s - q.ago_s);
+    if (mine.length) { selected = mine[0].id; lastTxLen = -1; loadTx(); } }
+  drawLeaderboard(); drawConvs(); drawView(); }
+
+let revealStarted = false;
+function runReveal(final){
+  if (revealStarted) return; revealStarted = true;
+  $('#reveal').style.display = 'block';
+  const ids = Object.fromEntries(dash.agents.map(a => [a.name, a]));
+  const rows = final.standings.slice().reverse(), max = Math.max(...rows.map(r => r.wealth), 1), floor = Math.max(0, Math.min(...rows.map(r => r.wealth)) - 250);
+  $('#rvlist').innerHTML = rows.map((s, i) => {
+    const card = Object.entries(s.card).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(' · ');
+    const items = Object.entries(s.items).filter(([k, v]) => v).map(([k, v]) => `${v} ${k}`).join(', ') || 'no items';
+    return `<div class="rv" id="rv${i}"><div><div class="nm">${s.rank}. ${esc(s.name)}${s.coin_flip ? ' 🪙' : ''}</div><div class="det">card: ${esc(card)}</div></div>
+      <div><div class="bar" data-w="${Math.max(4, 100 * (s.wealth - floor) / Math.max(1, max - floor)).toFixed(1)}" style="background:${color(s.id, s.house)}"></div><div class="det">${s.coins} coins + ${esc(items)}</div></div>
+      <div class="w">${s.wealth}</div></div>`;
+  }).join('');
+  rows.forEach((s, i) => setTimeout(() => { const el = $('#rv' + i); if (!el) return; el.classList.add('show');
+    setTimeout(() => { el.querySelector('.bar').style.width = el.querySelector('.bar').dataset.w + '%'; }, 120);
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 900 + i * 2200));
+  setTimeout(() => {
+    const w = final.standings[0];
+    $('#winner').style.display = 'block';
+    $('#winner').innerHTML = w ? `🏆 ${esc(w.name)} wins with ${w.wealth} Wealth!${w.coin_flip ? ' (coin flip)' : ''}` : '';
+    const f = final.fun_facts || {}, cards = [];
+    if (f.best_deal) cards.push(`<div class="panel"><h3>Best deal</h3><b>${esc(f.best_deal.agent)}</b> gained ${f.best_deal.gain}: ${esc(f.best_deal.deal)}</div>`);
+    if (f.most_chats) cards.push(`<div class="panel"><h3>Most chats</h3><b>${esc(f.most_chats.agent)}</b> with ${f.most_chats.chats} chats</div>`);
+    if (f.best_board_post) cards.push(`<div class="panel"><h3>Board post that paid off most</h3><b>${esc(f.best_board_post.agent)}</b>: “${esc(f.best_board_post.post)}” (+${f.best_board_post.gain} Wealth in the next 3 min)</div>`);
+    if (f.most_dramatic_walkout) cards.push(`<div class="panel"><h3>Most dramatic walkout</h3><b>${esc(f.most_dramatic_walkout.agent)}</b> left ${esc(f.most_dramatic_walkout.partner)} after ${f.most_dramatic_walkout.messages} messages: “${esc(f.most_dramatic_walkout.last_words)}”</div>`);
+    $('#facts').innerHTML = cards.join(''); $('#facts').style.display = 'grid';
+    $('#winner').scrollIntoView({ behavior: 'smooth' });
+  }, 900 + rows.length * 2200 + 600);
+}
+
+async function poll(){
+  try {
+    const [d, wr] = await Promise.all([fetch('/api/dashboard').then(r => r.json()), fetch('/api/watch/chats', watchOpts())]);
+    if (!d.agents) return;
+    const cl = wr.ok ? await wr.json() : null;
+    if (!wr.ok && SK && wr.status === 403) { SK = ''; try { localStorage.removeItem('esx_screen'); } catch (e) {} }  // a stale key
+    canRead = Array.isArray(cl);
+    dash = d; convs = canRead ? cl : (d.chats || []).map(c => ({ ...c, offers: {}, last: null, whose_turn: null }));
+    $('#viewmode').style.display = canRead && d.mode !== 'reveal' && SK ? '' : 'none';
+    $('#mode').textContent = d.mode === 'practice' ? `practice · round ${d.clock.round}` : d.mode;
+    $('#mode').className = 'pill ' + d.mode;
+    $('#clock').textContent = mmss(d.clock.seconds_left || 0);
+    $('#sAgents').textContent = d.agents.length; $('#sDeals').textContent = d.stats.deals; $('#sChats').textContent = d.stats.open_chats; $('#sPosts').textContent = d.stats.posts;
+    const b = $('#banner');
+    if (d.mode === 'game' && d.clock.last_call) { b.className = 'banner lastcall'; b.textContent = 'LAST CALL'; }
+    else if (d.mode === 'over') { b.className = 'banner lastcall'; b.textContent = '🔔 The bell has rung. Offers not accepted have vanished.'; }
+    else if (d.house_notice) { b.className = 'banner notice'; b.textContent = 'HOUSE: ' + d.house_notice.text; }
+    else { b.className = 'banner'; b.textContent = ''; }
+    if (follow) {
+      const live = convs.filter(c => c.status === 'open' && (!who || c.a === who || c.b === who)).sort((p, q) => p.ago_s - q.ago_s || q.n - p.n);
+      const cur = convs.find(c => c.id === selected);
+      if (live.length && (!cur || cur.status !== 'open' || (Date.now() / 1000 | 0) % 12 === 0)) { if (selected !== live[0].id) lastTxLen = -1; selected = live[0].id; }
+    }
+    drawLeaderboard(); drawConvs(); drawFeeds(); drawView();
+    loadTx();
+    if (d.mode === 'reveal' && d.final && d.final.fun_facts) runReveal(d.final);
+    if (d.mode !== 'reveal' && revealStarted) { revealStarted = false; $('#reveal').style.display = 'none'; }
+  } catch (e) { console.error(e); }
+}
+document.querySelectorAll('#ftabs .tab').forEach(t => t.onclick = () => { filter = t.dataset.f; drawConvs(); });
+document.querySelectorAll('[data-view]').forEach(t => t.onclick = () => { view = t.dataset.view; showView(); });
+$('#clearf').onclick = () => setWho('');
+$('#search').oninput = e => { search = e.target.value.trim().toLowerCase(); drawConvs(); };
+$('#follow').onchange = e => { follow = e.target.checked; };
+$('#closerv').onclick = e => { e.preventDefault(); $('#reveal').style.display = 'none'; };
+showView(); poll(); setInterval(poll, 2000); window.addEventListener('resize', drawView);
+</script>
+</body>
+</html>

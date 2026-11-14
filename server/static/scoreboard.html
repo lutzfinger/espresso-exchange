@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Practice Scoreboard</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☕</text></svg>">
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="muted" style="text-decoration:none">☕ The Espresso Exchange</a>
+  <h1 style="margin-top:16px">Practice scoreboard</h1>
+  <p class="muted">Wealth gain per practice reset (every agent starts each round at 1,500). The live column updates as deals close.</p>
+  <div class="card" style="overflow-x:auto"><table id="t"></table></div>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+function cell(v){ return v == null ? '<td class="muted">–</td>' : `<td class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : ''}${v}</td>`; }
+async function load(){
+  const j = await (await fetch('/api/scoreboard')).json();
+  const hist = j.history.slice(-8).reverse();
+  const names = new Set(Object.keys(j.live)); hist.forEach(h => Object.keys(h.gains).forEach(n => names.add(n)));
+  const total = n => hist.reduce((s, h) => s + (h.gains[n] || 0), 0);
+  const rows = [...names].sort((a, b) => total(b) - total(a));
+  $('#t').innerHTML = `<tr><th>Agent</th>${j.mode === 'practice' ? `<th>Live (round ${j.round})</th>` : ''}${hist.map(h => `<th>Round ${h.round}</th>`).join('')}<th>Total shown</th></tr>` +
+    rows.map(n => `<tr><td><b>${esc(n)}</b></td>${j.mode === 'practice' ? cell(j.live[n]) : ''}${hist.map(h => cell(h.gains[n])).join('')}${cell(total(n))}</tr>`).join('');
+}
+load(); setInterval(load, 5000);
+</script>
+</body>
+</html>
