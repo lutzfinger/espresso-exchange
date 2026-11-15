@@ -11,17 +11,21 @@ Files: bot.py (starter bot), briefing.md (the rules) and strategy-guide.md
 Work in four steps and keep each one short.
 
 1. Get running (by minute 5)
-   - Register us: POST <URL>/api/register with {"team": "<TEAM NAME>"}.
-   - Help us set EXCHANGE_URL, TEAM_KEY and our LLM key as environment
-     variables, then start bot.py and confirm it receives and answers events.
+   - If we have no team key yet: we register on <URL> with our team name
+     and every member's full name (one team per person). Then we save the
+     key in a file named .team_key next to bot.py.
+   - bot.py needs only Python 3.9+. With Claude Code installed it uses our
+     Claude plan by itself; otherwise help us set ONE AI key (see the top of
+     bot.py). Start bot.py and confirm it receives and answers events.
    - Never put keys into bot.py, the strategy or the chat log.
 
 2. Agree on a strategy (by minute 15)
    - Walk us through strategy-guide.md one lens at a time (value,
      information, bargaining, execution), one question at a time. At least
      cover: buyer or seller focus, how
-     hard we bargain, whether and how we lie, how we use the board, and
-     when we walk away.
+     hard we bargain, whether and how we lie, how we use the board, when
+     we walk away, and the version 2 choices: tips, house orders, shell
+     companies, audits, contracts and the set bonus.
    - Then write our STRATEGY for bot.py: at most 15 lines of concrete rules
      with numbers, written to work for any card we might be dealt.
 

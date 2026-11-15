@@ -55,6 +55,26 @@
   .tile .last { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
   .tile .turn { font-size: .7rem; color: var(--muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .wall .empty { grid-column: 1 / -1; }
+  /* the board at a glance, as big as the chat wall */
+  .bigview > #bwall, .bigview > #mkt { flex: 1 1 0; min-height: 330px; }
+  .bwall { display: none; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; overflow-y: auto; align-content: start; }
+  .post { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: .9rem; line-height: 1.35; min-width: 0; overflow-wrap: anywhere; }
+  .post .t { display: flex; justify-content: space-between; gap: 6px; font-weight: 800; font-size: .84rem; margin-bottom: 3px; cursor: pointer; }
+  .post .t span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .post .ago { color: var(--muted); font-weight: 600; white-space: nowrap; font-size: .74rem; }
+  .post.house { border-color: var(--warn); }
+  .post.house .t { color: var(--warn); cursor: default; }
+  .post.fresh { box-shadow: inset 0 0 0 1px var(--good); }
+  .post .kind { font-size: .62rem; font-weight: 800; padding: 1px 6px; border-radius: 5px; background: var(--warn); color: #1b1208; margin-right: 6px; }
+  .bwall .empty { grid-column: 1 / -1; }
+  .mkt { display: none; overflow-y: auto; }
+  .mkt table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  .mkt th { font-size: .66rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); text-align: left; padding: 0 6px 4px; }
+  .mkt td { padding: 4px 6px; border-bottom: 1px solid var(--line); }
+  .mkt td.r, .mkt th.r { text-align: right; font-family: var(--mono); }
+  .mkt h4 { margin: 12px 0 6px; font-size: .74rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .up { color: var(--good); } .down { color: var(--bad); }
+  .hiddenw { color: var(--muted); padding: 40px 10px; text-align: center; }
   /* conversations */
   .convs { max-height: 560px; overflow-y: auto; }
   .conv { padding: 7px 8px; border-radius: 10px; border: 1px solid transparent; cursor: pointer; margin-bottom: 4px; }
@@ -117,12 +137,12 @@
 <div id="banner" class="banner"></div>
 <div class="main">
   <div class="panel">
-    <h3>Leaderboard <span class="muted" style="text-transform:none;letter-spacing:0" title="Wealth = coins + items, valued at each bot's own card">click a bot to see its chats</span></h3>
+    <h3>Leaderboard <span id="lbnote" class="muted" style="text-transform:none;letter-spacing:0" title="Wealth = coins + items, valued at each bot's own card x the news multiplier">click a bot to see its chats</span></h3>
     <table class="lb" id="lb"></table>
   </div>
   <div class="panel span2 bigview">
-    <h3><span class="tabs"><span class="tab on" data-view="wall">Live chats</span><span class="tab" data-view="race">Wealth race</span><span class="tab" data-view="map">Market map</span></span><span id="legend" class="muted" style="text-transform:none;letter-spacing:0"></span></h3>
-    <div id="wall" class="wall"></div><canvas id="race"></canvas><svg id="map" viewBox="0 0 640 330"></svg>
+    <h3><span class="tabs"><span class="tab on" data-view="wall">Live chats</span><span class="tab" data-view="board">Board</span><span class="tab" data-view="market">Market</span><span class="tab" data-view="race">Wealth race</span><span class="tab" data-view="map">Market map</span></span><span id="legend" class="muted" style="text-transform:none;letter-spacing:0"></span></h3>
+    <div id="wall" class="wall"></div><div id="bwall" class="bwall"></div><div id="mkt" class="mkt"></div><canvas id="race"></canvas><svg id="map" viewBox="0 0 640 330"></svg><div id="hiddenw" class="hiddenw" style="display:none"></div>
   </div>
 
   <div class="panel">
@@ -143,7 +163,7 @@
 </div>
 <div id="reveal">
   <h1>🏆 The Reveal</h1>
-  <p class="muted" style="text-align:center">Cards flip one agent at a time, lowest Wealth first. <a href="#" id="closerv">close</a></p>
+  <p class="muted" style="text-align:center">Cards flip one team at a time, lowest score first. <a href="#" id="closerv">close</a></p>
   <div id="rvlist"></div>
   <div id="winner" class="winner"></div>
   <div id="facts" class="facts"></div>
@@ -168,7 +188,10 @@ const PRIVATE = 'Chat words are private until the reveal. The host’s screen sh
 let dash = null, convs = [], filter = 'all', who = '', search = '', selected = null, follow = true, view = 'wall', lastTxLen = -1;
 const byName = () => Object.fromEntries((dash ? dash.agents : []).map(a => [a.name, a]));
 
+const HIDDEN = 'Wealth is hidden until the bell: public numbers would give away secret shell companies. The host’s screen shows it.';
+function wealthHidden(){ return dash && dash.wealth_hidden; }
 function drawRace(){
+  if (wealthHidden()) { $('#race').style.display = 'none'; $('#hiddenw').style.display = 'block'; $('#hiddenw').textContent = HIDDEN; return; }
   const cv = $('#race'), dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
   if (!W) return;
   cv.width = W * dpr; cv.height = H * dpr; const g = cv.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0,0,W,H);
@@ -211,17 +234,19 @@ function drawMap(){
   dash.agents.forEach(a => { const [px, py] = pos[a.id]; const init = a.name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
     s += `<g style="cursor:pointer" data-name="${esc(a.name)}"><circle cx="${px}" cy="${py}" r="17" fill="${color(a.id, a.house)}" stroke="var(--panel)" stroke-width="3"/>`;
     s += `<text x="${px}" y="${py + 4}" text-anchor="middle" font-size="11" font-weight="800" fill="#1b1208">${esc(init)}</text>`;
-    s += `<text x="${px}" y="${py + (py > cy ? 32 : -23)}" text-anchor="middle" font-size="11" fill="var(--ink)">${esc(a.name)} · ${a.wealth}</text></g>`; });
+    s += `<text x="${px}" y="${py + (py > cy ? 32 : -23)}" text-anchor="middle" font-size="11" fill="var(--ink)">${esc(a.name)}${a.wealth == null ? '' : ' · ' + a.wealth}</text></g>`; });
   svg.innerHTML = s;
   svg.querySelectorAll('g[data-name]').forEach(g => g.onclick = () => setWho(g.dataset.name));
 }
 
 function drawLeaderboard(){
-  const rows = dash.agents.slice().sort((a, b) => b.wealth - a.wealth);
+  const hid = wealthHidden();
+  const rows = dash.agents.slice().sort((a, b) => hid ? (b.deals || 0) - (a.deals || 0) : b.wealth - a.wealth);
   $('#lb').innerHTML = '<colgroup><col style="width:24px"><col><col style="width:62px"><col style="width:54px"><col style="width:46px"></colgroup><thead><tr><th></th><th>Bot</th><th class="r">Wealth</th><th class="r" title="Wealth gained since the start">±</th><th class="r">Deals</th></tr></thead><tbody>' + rows.map((a, i) => `<tr data-name="${esc(a.name)}" class="${who === a.name ? 'sel' : ''}"><td style="width:22px" class="muted">${i + 1}</td>
     <td><div class="nm" title="${esc(a.name)}"><span class="dot" style="background:${color(a.id, a.house)}"></span>${esc(a.name)}</div>${a.house || a.open_chats ? `<div class="meta">${[a.house ? 'house bot' : '', a.open_chats ? a.open_chats + ' live' : ''].filter(Boolean).join(' · ')}</div>` : ''}</td>
-    <td class="w">${a.wealth}</td><td class="g ${a.gain >= 0 ? 'pos' : 'neg'}">${a.gain >= 0 ? '+' : ''}${a.gain}</td><td class="d">${a.deals || 0}</td></tr>`).join('') + '</tbody>';
-  $('#sLead').textContent = rows.length ? `${rows[0].name} ${rows[0].wealth}` : '–';
+    <td class="w">${hid ? '<span class="muted">?</span>' : a.wealth}</td><td class="g ${a.gain >= 0 ? 'pos' : 'neg'}">${hid ? '' : (a.gain >= 0 ? '+' : '') + a.gain}</td><td class="d">${a.deals || 0}</td></tr>`).join('') + '</tbody>';
+  $('#lbnote').textContent = hid ? 'Wealth hidden until the bell · sorted by deals' : 'click a bot to see its chats';
+  $('#sLead').textContent = hid ? (dash.leader_pulse ? 'pulse: ' + dash.leader_pulse.join(', ') : 'hidden') : (rows.length ? `${rows[0].name} ${rows[0].wealth}` : '–');
   document.querySelectorAll('#lb tbody tr').forEach(tr => tr.onclick = () => setWho(who === tr.dataset.name ? '' : tr.dataset.name));
 }
 
@@ -241,10 +266,38 @@ function drawWall(){
   document.querySelectorAll('.tile').forEach(el => el.onclick = () => { selected = +el.dataset.id; follow = false; $('#follow').checked = false; lastTxLen = -1; drawWall(); drawConvs(); loadTx(); });
   const t = document.querySelector('[data-view="wall"]'); if (t) t.textContent = 'Live chats ' + live.length;
 }
-const LEGEND = { wall: 'click a chat to read it below', race: 'dashed = house bots', map: 'lines = live chats' };
-function drawView(){ if (!dash) return; if (view === 'race') drawRace(); else if (view === 'map') drawMap(); else drawWall(); }
+function postKind(t){ const m = /^(NEWS|HOUSE ORDER #\d+ closed|HOUSE ORDER|LEADER PULSE|Last call)/.exec(t || ''); return m ? m[1].replace(/ #\d+ closed/, ' closed').toUpperCase() : 'HOUSE'; }
+function drawBoardWall(){
+  const posts = (dash.board || []).filter(p => !who || p.author === who || p.author === 'HOUSE');
+  $('#bwall').innerHTML = posts.map(p => {
+    const house = p.author === 'HOUSE', a = byName()[p.author];
+    const head = house ? `<span><span class="kind">${esc(postKind(p.text))}</span>the house</span>` : `<span data-name="${esc(p.author)}"><span class="dot" style="background:${a ? color(a.id, a.house) : 'var(--muted)'}"></span>${esc(p.author)}</span>`;
+    return `<div class="post ${house ? 'house' : ''} ${p.ago_s <= 4 ? 'fresh' : ''}"><div class="t">${head}<span class="ago">${p.ago_s}s ago</span></div>${esc(p.text)}</div>`;
+  }).join('') || `<div class="empty">Nothing on the board${who ? ' from ' + esc(who) : ''} yet.</div>`;
+  document.querySelectorAll('#bwall [data-name]').forEach(el => el.parentElement.onclick = () => setWho(who === el.dataset.name ? '' : el.dataset.name));
+  const t = document.querySelector('[data-view="board"]'); if (t) t.textContent = 'Board ' + (dash.stats ? dash.stats.posts : posts.length);
+}
+function drawMarket(){
+  if (!dash.v2) { $('#mkt').innerHTML = '<div class="empty">Classic rules: no ticker, news or house orders.</div>'; return; }
+  const tk = dash.ticker || {}, mu = dash.multipliers || {};
+  const rows = Object.keys(tk).map(t => { const m = mu[t] || 1, cls = m > 1 ? 'up' : (m < 1 ? 'down' : '');
+    return `<tr><td>${esc(t)}</td><td class="r ${cls}">x${+m.toFixed(2)}</td><td class="r">${tk[t].last ?? '–'}</td><td class="r">${tk[t].avg5 ?? '–'}</td><td class="r">${tk[t].trades}</td></tr>`; }).join('');
+  const orders = (dash.house_orders || []).map(o => `<tr><td>#${o.id} ${esc(o.buyer)}</td><td>${o.qty} ${esc(o.item)}</td><td class="r">${o.cap}</td><td>${o.status === 'open' ? `<span class="badge open"><span class="live"></span>OPEN</span> ${o.closes_in_s}s · ${o.asks} asks` : esc(o.status) + (o.filled ? ` (${o.filled} sold)` : '')}</td></tr>`).join('');
+  const news = (dash.news || []).map(n => `<div>${esc(n.headline)} <span class="muted">${Math.round(n.ago_s / 60)} min ago</span></div>`).join('');
+  $('#mkt').innerHTML = `<h4 style="margin-top:0">Ticker <span class="muted" style="text-transform:none;letter-spacing:0">coin prices of item-for-coins deals · multiplier from the news</span></h4>
+    <table><tr><th>Item</th><th class="r">Multiplier</th><th class="r">Last</th><th class="r">Avg of 5</th><th class="r">Trades</th></tr>${rows}</table>
+    <h4>House orders <span class="muted" style="text-transform:none;letter-spacing:0">lowest asks win, each paid its own ask</span></h4>
+    ${orders ? `<table><tr><th>Order</th><th>Buys</th><th class="r">Cap</th><th>Status</th></tr>${orders}</table>` : '<p class="muted">The first order comes 90 seconds into the round.</p>'}
+    <h4>News</h4>${news || '<p class="muted">No news yet. Some bots got a private tip before each item.</p>'}
+    ${dash.leader_pulse ? `<h4>Leader pulse</h4><div>${dash.leader_pulse.map(esc).join(' · ')}</div>` : ''}`;
+}
+const LEGEND = { wall: 'click a chat to read it below', board: 'newest first · click a name to follow that bot', market: 'what every bot sees', race: 'dashed = house bots', map: 'lines = live chats' };
+function drawView(){ if (!dash) return; $('#hiddenw').style.display = 'none';
+  if (view === 'race') { if (!wealthHidden()) $('#race').style.display = 'block'; drawRace(); } else if (view === 'map') drawMap(); else if (view === 'board') drawBoardWall(); else if (view === 'market') drawMarket(); else drawWall();
+  if (view !== 'board') { const t = document.querySelector('[data-view="board"]'); if (t && dash.stats) t.textContent = 'Board ' + dash.stats.posts; } }
 function showView(){
-  $('#wall').style.display = view === 'wall' ? 'grid' : 'none'; $('#race').style.display = view === 'race' ? 'block' : 'none'; $('#map').style.display = view === 'map' ? 'block' : 'none';
+  $('#wall').style.display = view === 'wall' ? 'grid' : 'none'; $('#bwall').style.display = view === 'board' ? 'grid' : 'none'; $('#mkt').style.display = view === 'market' ? 'block' : 'none';
+  $('#race').style.display = view === 'race' ? 'block' : 'none'; $('#map').style.display = view === 'map' ? 'block' : 'none';
   document.querySelectorAll('[data-view]').forEach(x => x.classList.toggle('on', x.dataset.view === view));
   $('#legend').textContent = LEGEND[view]; drawView();
 }
@@ -311,8 +364,9 @@ function runReveal(final){
   $('#rvlist').innerHTML = rows.map((s, i) => {
     const card = Object.entries(s.card).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(' · ');
     const items = Object.entries(s.items).filter(([k, v]) => v).map(([k, v]) => `${v} ${k}`).join(', ') || 'no items';
+    const extra = (s.shells && s.shells.length ? ' · shells: ' + s.shells.map(x => `${esc(x.name)} ${x.wealth}`).join(', ') : '') + (s.set_bonus ? ` · set bonus +${s.set_bonus}` : '');
     return `<div class="rv" id="rv${i}"><div><div class="nm">${s.rank}. ${esc(s.name)}${s.coin_flip ? ' 🪙' : ''}</div><div class="det">card: ${esc(card)}</div></div>
-      <div><div class="bar" data-w="${Math.max(4, 100 * (s.wealth - floor) / Math.max(1, max - floor)).toFixed(1)}" style="background:${color(s.id, s.house)}"></div><div class="det">${s.coins} coins + ${esc(items)}</div></div>
+      <div><div class="bar" data-w="${Math.max(4, 100 * (s.wealth - floor) / Math.max(1, max - floor)).toFixed(1)}" style="background:${color(s.id, s.house)}"></div><div class="det">${s.coins} coins + ${esc(items)}${extra}</div></div>
       <div class="w">${s.wealth}</div></div>`;
   }).join('');
   rows.forEach((s, i) => setTimeout(() => { const el = $('#rv' + i); if (!el) return; el.classList.add('show');
@@ -327,6 +381,13 @@ function runReveal(final){
     if (f.most_chats) cards.push(`<div class="panel"><h3>Most chats</h3><b>${esc(f.most_chats.agent)}</b> with ${f.most_chats.chats} chats</div>`);
     if (f.best_board_post) cards.push(`<div class="panel"><h3>Board post that paid off most</h3><b>${esc(f.best_board_post.agent)}</b>: “${esc(f.best_board_post.post)}” (+${f.best_board_post.gain} Wealth in the next 3 min)</div>`);
     if (f.most_dramatic_walkout) cards.push(`<div class="panel"><h3>Most dramatic walkout</h3><b>${esc(f.most_dramatic_walkout.agent)}</b> left ${esc(f.most_dramatic_walkout.partner)} after ${f.most_dramatic_walkout.messages} messages: “${esc(f.most_dramatic_walkout.last_words)}”</div>`);
+    const v = final.v2;
+    if (v) {
+      if (v.shell_network && v.shell_network.length) cards.push(`<div class="panel"><h3>Shell companies, unmasked</h3>${v.shell_network.map(n => `<div><b>${esc(n.team)}</b> owned ${n.shells.map(esc).join(', ')}</div>`).join('')}</div>`);
+      cards.push(`<div class="panel"><h3>Wash trades</h3>${v.wash_trades.length ? `<b>${v.wash_trades.length}</b> deals between companies of the same team:` + v.wash_trades.slice(0, 5).map(w => `<div class="det">${esc(w.text)}</div>`).join('') : 'None. Every deal was between different teams.'}</div>`);
+      if (v.news && v.news.length) cards.push(`<div class="panel"><h3>The news</h3>${v.news.map(n => `<div class="det">${esc(n.headline)}</div>`).join('')}</div>`);
+      if (v.audits && v.audits.length) cards.push(`<div class="panel"><h3>Audits</h3><b>${v.audits.length}</b> audits, ${v.audits.filter(a => a.same).length} caught a shell</div>`);
+    }
     $('#facts').innerHTML = cards.join(''); $('#facts').style.display = 'grid';
     $('#winner').scrollIntoView({ behavior: 'smooth' });
   }, 900 + rows.length * 2200 + 600);
@@ -334,7 +395,7 @@ function runReveal(final){
 
 async function poll(){
   try {
-    const [d, wr] = await Promise.all([fetch('/api/dashboard').then(r => r.json()), fetch('/api/watch/chats', watchOpts())]);
+    const [d, wr] = await Promise.all([fetch('/api/dashboard', watchOpts()).then(r => r.json()), fetch('/api/watch/chats', watchOpts())]);
     if (!d.agents) return;
     const cl = wr.ok ? await wr.json() : null;
     if (!wr.ok && SK && wr.status === 403) { SK = ''; try { localStorage.removeItem('esx_screen'); } catch (e) {} }  // a stale key

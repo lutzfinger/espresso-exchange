@@ -30,7 +30,9 @@ class SimBot(threading.Thread):
         self.brain = Brain(style, random.Random(seed))
         self.delay = delay
         self.rng = random.Random(seed)
-        r = requests.post(f"{base}/api/register", json={"team": name}, timeout=10).json()
+        tag = "".join(chr(97 + ord(c) // 26 % 26) + chr(97 + ord(c) % 26) for c in name)  # one person per team
+        member = "Sim " + tag.title() + " Player"
+        r = requests.post(f"{base}/api/register", json={"team": name, "members": [member]}, timeout=10).json()
         assert "key" in r, r
         self.key = r["key"]
         self.h = {"X-Team-Key": self.key}

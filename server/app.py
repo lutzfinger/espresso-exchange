@@ -145,6 +145,8 @@ class Hub:
                     if ev["type"] == "market":
                         delay = random.uniform(0.2, 2.0) * self.m.cfg.house_speed
                     await asyncio.sleep(delay)
+                    if ev.get("agents"):  # house bots leave the (secret) shell companies alone
+                        ev["agents"] = [n for n in ev["agents"] if self._not_shell(n)]
                     answer = brain.decide(ev)
                     answer["event_id"] = ev["event_id"]
                     self.m.act(a.id, answer)
@@ -155,6 +157,10 @@ class Hub:
             except Exception:
                 log.exception("house bot %s failed", name)
                 await asyncio.sleep(2)
+
+    def _not_shell(self, name: str) -> bool:
+        a = self.m.agents.get(self.m.by_name.get(name.lower(), -1))
+        return a is None or a.owner is None
 
     def start(self):
         self.tasks.append(asyncio.create_task(self.ticker()))
@@ -240,8 +246,9 @@ def create_app(db_path: str | None = None, config: Config | None = None, house: 
         a = h.m.agent_for_key(key)
         if a is None or a.is_house:
             await asyncio.sleep(2)  # slow down a bot stuck with a bad key instead of letting it spin
-            return None, err(401, "unknown team key: register with POST /api/register {\"team\": \"<name>\"} "
-                                  "and send the key in the X-Team-Key header")
+            return None, err(401, "unknown team key: register on the game website (team name plus every member's "
+                                  "full name), or POST /api/register {\"team\": \"<name>\", \"members\": "
+                                  "[\"Ana Lopez\", \"Ben Wu\"]}, then send the key in the X-Team-Key header")
         h.team_limiter.rate = h.m.cfg.rate_limit_per_s
         h.team_limiter.burst = h.m.cfg.rate_limit_per_s * 2
         if not h.team_limiter.allow(a.key, time.monotonic()):
@@ -279,15 +286,35 @@ def create_app(db_path: str | None = None, config: Config | None = None, house: 
             body = await request.json()
         except Exception:
             body = {}
-        name = (body or {}).get("team") or (body or {}).get("name") or (body or {}).get("agent")
+        body = body if isinstance(body, dict) else {}
+        name = body.get("team") or body.get("name") or body.get("agent")
+        members = body.get("members", body.get("team_members"))
         try:
-            a = h.m.register(name)
+            a = h.m.register(name, members=members)
         except GameError as e:
             return err(400, str(e))
         url = base_url(request)
-        return {"team": a.name, "key": a.key, "server": url,
+        return {"team": a.name, "key": a.key, "server": url, "members": a.members,
                 "next": f"export EXCHANGE_URL={url} TEAM_KEY={a.key}  then  python bot.py",
                 "team_page": f"{url}/team#key={a.key}"}
+
+    @app.post("/api/shell")
+    async def api_shell(request: Request):
+        """Create a shell company for the team (the bot can also send "create_shell" in any answer)."""
+        a, e = await auth_team(request)
+        if e:
+            return e
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        body = body if isinstance(body, dict) else {}
+        try:
+            s = hub().m.create_shell(a, body.get("name") or body.get("shell"))
+        except GameError as ex:
+            return err(400, str(ex))
+        return {"shell": s.name, "team": a.name, "active": s.active,
+                "note": "It starts empty. Move coins or items to it with a transfer in any answer."}
 
     @app.get("/api/next")
     async def api_next(request: Request, wait: float = 30):
@@ -353,7 +380,8 @@ def create_app(db_path: str | None = None, config: Config | None = None, house: 
             await asyncio.sleep(0.5)
             return err(429, "too many reads from this address; slow down a little")
         m = hub().m
-        live = {a.name: a.wealth() - a.start_wealth for a in m.active_agents()} if m.mode == "practice" else {}
+        live = {a.name: m.team_score(a.id) - a.start_wealth for a in m.active_agents() if a.owner is None} \
+            if m.mode == "practice" else {}
         return {"mode": m.mode, "round": m.round["id"] if m.round else None, "live": live,
                 "history": list(m.practice_history)}
 
@@ -364,7 +392,19 @@ def create_app(db_path: str | None = None, config: Config | None = None, house: 
         if not h.ip_limiter.allow("dash:" + client_ip(request), time.monotonic()):
             await asyncio.sleep(0.5)
             return err(429, "too many dashboard reads from this address; slow down a little")
-        return h.m.dashboard()
+        return h.m.dashboard(full=await screen_ok(request))
+
+    async def screen_ok(request: Request) -> bool:
+        """The host's screen (screen key) or the host key: the dashboard with every agent's Wealth."""
+        h = hub()
+        if is_host(request):
+            return True
+        k = request.headers.get("x-screen-key") or request.query_params.get("screen") or ""
+        if k and hmac.compare_digest(k, h.screen_key):
+            return True
+        if k:
+            await host_denied(request)  # slow and rate limited, like a wrong host key
+        return False
 
     async def watch_denied(request: Request):
         """Chat words are for the host's screen during play: the screen key or the host key. Everyone may read
@@ -493,7 +533,7 @@ def create_app(db_path: str | None = None, config: Config | None = None, house: 
 
     @app.get("/starter/{name}")
     async def starter_file(name: str, request: Request, team: str = "<TEAM NAME>"):
-        allowed = {"bot.py", "briefing.md", "strategy-guide.md", "team-prompt.md"}
+        allowed = {"bot.py", "briefing.md", "strategy-guide.md", "team-prompt.md", "ai-prompt.md"}
         if name == "espresso-starter.zip":
             buf = io.BytesIO()
             with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:

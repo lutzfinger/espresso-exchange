@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS posts (id INTEGER PRIMARY KEY, round_id INTEGER, auth
     text TEXT, at REAL);
 CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, at REAL, kind TEXT, agent INTEGER,
     data TEXT);
+CREATE TABLE IF NOT EXISTS private_moves (id INTEGER PRIMARY KEY AUTOINCREMENT, round_id INTEGER, kind TEXT,
+    terms TEXT, at REAL);
 CREATE INDEX IF NOT EXISTS ix_msg_round ON messages(round_id);
 CREATE INDEX IF NOT EXISTS ix_deal_round ON deals(round_id);
 CREATE INDEX IF NOT EXISTS ix_post_round ON posts(round_id);
@@ -43,6 +45,16 @@ class Store:
             self.db.execute("PRAGMA journal_mode=WAL")
             self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.executescript(SCHEMA)
+        self._migrate()
+
+    def _migrate(self):
+        """Version 2 columns on a database made by version 1: team members and the owner of a shell."""
+        cols = {r["name"] for r in self.db.execute("PRAGMA table_info(agents)")}
+        if "members" not in cols:
+            self.db.execute("ALTER TABLE agents ADD COLUMN members TEXT")
+        if "owner" not in cols:
+            self.db.execute("ALTER TABLE agents ADD COLUMN owner INTEGER")
+        self.db.execute("CREATE INDEX IF NOT EXISTS ix_moves_round ON private_moves(round_id)")
 
     # ---- meta ----
     def get_meta(self, k, default=None):
@@ -60,16 +72,23 @@ class Store:
     # ---- agents ----
     def save_agent(self, a):
         self.db.execute(
-            "INSERT INTO agents(id,name,key,is_house,created_at,card,coins,items) VALUES(?,?,?,?,?,?,?,?) "
+            "INSERT INTO agents(id,name,key,is_house,created_at,card,coins,items,members,owner) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?) "
             "ON CONFLICT(id) DO UPDATE SET name=excluded.name, card=excluded.card, coins=excluded.coins, "
-            "items=excluded.items, removed=0",
-            (a.id, a.name, a.key, int(a.is_house), a.created_at, _j(a.card), a.coins, _j(a.items())))
+            "items=excluded.items, members=excluded.members, owner=excluded.owner, removed=0",
+            (a.id, a.name, a.key, int(a.is_house), a.created_at, _j(a.card), a.coins, _j(a.items()),
+             _j(a.members), a.owner))
 
     def remove_agent(self, agent_id):
         self.db.execute("UPDATE agents SET removed=1 WHERE id=?", (agent_id,))
 
     def load_agents(self):
-        return [dict(r) for r in self.db.execute("SELECT * FROM agents WHERE removed=0 ORDER BY id")]
+        out = []
+        for r in self.db.execute("SELECT * FROM agents WHERE removed=0 ORDER BY id"):
+            d = dict(r)
+            d["members"] = json.loads(d["members"]) if d.get("members") else []
+            out.append(d)
+        return out
 
     def removed_names(self):
         return {r["name"].lower() for r in self.db.execute("SELECT name FROM agents WHERE removed=1")}
@@ -127,6 +146,14 @@ class Store:
     def save_post(self, p: dict):
         self.db.execute("INSERT INTO posts(id,round_id,author,author_id,text,at) VALUES(?,?,?,?,?,?)",
                         (p["id"], p["round_id"], p["author"], p.get("author_id"), p["text"], p["at"]))
+
+    def save_private(self, round_id: int, kind: str, terms: dict, at: float):
+        self.db.execute("INSERT INTO private_moves(round_id,kind,terms,at) VALUES(?,?,?,?)",
+                        (round_id, kind, _j(terms), at))
+
+    def round_private(self, rid):
+        return [json.loads(r["terms"]) for r in self.db.execute(
+            "SELECT terms FROM private_moves WHERE round_id=? ORDER BY id", (rid,))]
 
     def round_deals(self, rid):
         return [json.loads(r["terms"]) for r in self.db.execute("SELECT terms FROM deals WHERE round_id=? ORDER BY id",

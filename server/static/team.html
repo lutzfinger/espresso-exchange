@@ -38,7 +38,9 @@ async function load(){
   $('#login').style.display = 'none'; $('#view').style.display = '';
   $('#title').textContent = j.team; $('#mode').textContent = j.mode; $('#mode').className = 'pill ' + j.mode;
   const h = j.holdings;
-  $('#now').innerHTML = j.active ? `<p style="margin-top:0"><b style="font-size:1.6rem">${j.wealth}</b> Wealth <span class="${j.gain_this_round >= 0 ? 'pos' : 'neg'}">(${j.gain_this_round >= 0 ? '+' : ''}${j.gain_this_round} this round)</span></p>
+  const score = j.team_score ?? j.wealth, shells = (j.entities || []).filter(e => e.role === 'shell');
+  $('#now').innerHTML = j.active ? `<p style="margin-top:0"><b style="font-size:1.6rem">${score}</b> team score <span class="${j.gain_this_round >= 0 ? 'pos' : 'neg'}">(${j.gain_this_round >= 0 ? '+' : ''}${j.gain_this_round} this round)</span></p>
+    ${shells.length ? `<p class="muted">Main ${j.wealth} · ` + shells.map(e => `shell ${esc(e.name)} ${e.wealth ?? ''}`).join(' · ') + '</p>' : ''}
     <p>${h.coins} coins · ${Object.entries(h.items).map(([k, v]) => `<span class="chip">${v} ${k}</span>`).join('')}</p>
     <p class="muted">Card: ${Object.entries(j.card).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="chip">${k} ${v}</span>`).join('')}</p>
     <p class="muted" style="margin-bottom:0">${esc(j.clock.game_clock || '')}</p>` : '<p class="muted">Not in the current round.</p>';

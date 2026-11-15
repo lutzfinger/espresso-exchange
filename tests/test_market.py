@@ -1,15 +1,28 @@
-"""Engine tests with a fake clock: rules from the spec, one by one."""
+"""Engine tests with a fake clock: rules from the spec, one by one.
+
+These run the CLASSIC rules (v2_rules=False, no member names): they prove the host's safety switch still plays the
+original game. tests/test_v2.py covers the version 2 rules."""
 import random
 from collections import Counter
 
 import pytest
 
-from conftest import FakeClock, make_market
+from conftest import FakeClock
+from conftest import make_market as _make_market
 from server.config import Config
 from server.house_bots import Brain
 from server.items import ITEMS, normalize_offer
 from server.market import GameError, Market
 from server.store import Store
+
+
+CLASSIC = {"v2_rules": False, "require_members": False}
+
+
+def make_market(clock, **kw):
+    for k, v in CLASSIC.items():
+        kw.setdefault(k, v)
+    return _make_market(clock, **kw)
 
 
 def ag(m, name):
@@ -108,7 +121,7 @@ def test_registration_rules(clock):
 def test_signed_key_survives_lost_disk(clock):
     m1 = make_market(clock, n_teams=0)
     key = m1.register("Crema Cartel").key
-    m2 = Market(Config(), store=Store(":memory:"), clock=clock, secret=m1.secret)
+    m2 = Market(Config(**CLASSIC), store=Store(":memory:"), clock=clock, secret=m1.secret)
     m2.start_round("practice")
     a = m2.agent_for_key(key)
     assert a is not None and a.name == "Crema Cartel" and a.active
@@ -551,7 +564,7 @@ def test_restart_mid_game_restores_holdings(tmp_path, clock):
     posts = len(m.posts)
     m.store.db.close()
     clock.advance(5)
-    m2 = Market(Config(), store=Store(db), clock=clock, secret=m.secret)
+    m2 = Market(Config(**CLASSIC), store=Store(db), clock=clock, secret=m.secret)
     assert m2.restore() is True
     after = {a.name: (a.coins, a.items(), a.card, a.wealth()) for a in m2.active_agents()}
     assert after == before
@@ -591,7 +604,7 @@ def test_wipe_removes_teams_and_invalidates_keys(tmp_path, clock):
     assert m.agent_for_key(old_key) is None  # old signed keys no longer re-register
     new = m.register("Team 1")  # the name is free again
     assert new.key != old_key and m.agent_for_key(new.key) is new
-    m2 = Market(Config(), store=Store(str(tmp_path / "w.db")), clock=clock, secret=m.secret)
+    m2 = Market(Config(**CLASSIC), store=Store(str(tmp_path / "w.db")), clock=clock, secret=m.secret)
     m2.restore()
     assert m2.agent_for_key(new.key) is not None and m2.agent_for_key(old_key) is None
 

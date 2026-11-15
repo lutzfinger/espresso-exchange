@@ -142,3 +142,9 @@ def fmt_offer(offer: dict | None) -> str:
     if not offer:
         return ""
     return f"{fmt_goods(offer['give'])} for {fmt_goods(offer['get'])}"
+
+
+def norm_goods(side, label: str = "goods"):
+    """Return (goods, errors) for one side, e.g. {"Burr Grinder": "2", "cash": 40} -> {"grinder": 2, "coins": 40}."""
+    errors: list = []
+    return _norm_side(side, label, errors), errors

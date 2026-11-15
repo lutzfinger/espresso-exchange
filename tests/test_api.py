@@ -10,6 +10,7 @@ import zipfile
 import pytest
 from fastapi.testclient import TestClient
 
+from conftest import new_person
 from server.app import create_app
 from server.config import Config
 
@@ -24,8 +25,8 @@ def client(monkeypatch):
         yield c
 
 
-def reg(c, name):
-    r = c.post("/api/register", json={"team": name})
+def reg(c, name, **kw):
+    r = c.post("/api/register", json={"team": name, "members": [new_person()]}, **kw)
     assert r.status_code == 200, r.text
     return {"X-Team-Key": r.json()["key"]}
 
@@ -36,11 +37,12 @@ def test_register_and_first_event(client):
     assert client.post("/api/register", json={"team": "Opener"}).status_code == 400
     assert client.post("/api/register", json={}).status_code == 400
     assert client.post("/api/register", content=b"garbage").status_code == 400
-    assert client.post("/api/register", json={"name": "By Name"}).status_code == 200  # 'name' works too
+    assert client.post("/api/register", json={"name": "By Name", "members": "Bea Byname"}).status_code == 200  # 'name' works too
     ev = client.get("/api/next?wait=0", headers=h).json()
     assert ev["type"] == "market" and ev["you"] == "Crema Cartel" and ev["wealth"] == 1500
     assert "Opener" in ev["agents"] and "By Name" in ev["agents"]
-    assert set(ev["dashboard_wealth"]) >= {"Crema Cartel", "Opener"}
+    # version 2: other agents' Wealth is hidden during play; the leader pulse and the team block come instead
+    assert "dashboard_wealth" not in ev and "leader_pulse" in ev and ev["team"]["name"] == "Crema Cartel"
     w = client.get("/api/next?wait=0", headers=h).json()
     assert w["type"] == "wait"
 
@@ -122,8 +124,8 @@ def test_attack_findings_are_closed(monkeypatch):
         # H2: a forged X-Forwarded-For entry sits left of the proxy's; the proxy's entry counts
         st = c.get("/api/host/state", headers={**HOST, "X-Forwarded-For": "6.6.6.6, 10.1.2.3"}).json()
         assert st["your_address"] == "10.1.2.3"
-        a = {"X-Team-Key": c.post("/api/register", json={"team": "Real Team"}, headers={"X-Forwarded-For": "10.7.7.7"}).json()["key"]}
-        codes = [c.post("/api/register", json={"team": f"Spam {i}"},
+        a = {"X-Team-Key": c.post("/api/register", json={"team": "Real Team", "members": [new_person()]}, headers={"X-Forwarded-For": "10.7.7.7"}).json()["key"]}
+        codes = [c.post("/api/register", json={"team": f"Spam {i}", "members": [new_person()]},
                         headers={"X-Forwarded-For": f"9.9.{i}.9, 10.1.2.3"}).status_code for i in range(45)]
         assert codes[:38].count(200) == 38 and codes[-1] in (400, 429), codes  # limited, or the 40-team cap
         assert sum(x == 200 for x in codes) <= 40
@@ -143,7 +145,7 @@ def test_attack_findings_are_closed(monkeypatch):
     with TestClient(create_app(db_path=":memory:", house=False)) as c:
         assert c.post("/api/register", json={"team": "Ｆａｉｒ Ｔｒａｄｅｒ"}).status_code == 400  # fullwidth = Fair Trader
         assert c.post("/api/register", json={"team": "ＨＯＳＴ"}).status_code == 400
-        assert c.post("/api/register", json={"team": "Fa\u0456r Trader"}).json()["team"] == "Far Trader"  # Cyrillic i dropped
+        assert c.post("/api/register", json={"team": "Fa\u0456r Trader", "members": [new_person()]}).json()["team"] == "Far Trader"  # Cyrillic i dropped
     # H3: every page escapes quotes, so text cannot break out of an HTML attribute
     static = os.path.join(os.path.dirname(__file__), "..", "server", "static")
     for f in ("index", "screen", "host", "scoreboard", "team"):
@@ -201,9 +203,20 @@ def test_starter_kit_is_personalised(client):
     t = client.get("/starter/team-prompt.md?team=Crema%20Cartel").text
     assert "http://testserver" in t and "Crema Cartel" in t and "<URL>" not in t
     z = zipfile.ZipFile(io.BytesIO(client.get("/starter/espresso-starter.zip?team=X").content))
-    assert sorted(z.namelist()) == ["espresso-starter/bot.py", "espresso-starter/briefing.md",
-                                    "espresso-starter/strategy-guide.md", "espresso-starter/team-prompt.md"]
+    assert sorted(z.namelist()) == ["espresso-starter/ai-prompt.md", "espresso-starter/bot.py",
+                                    "espresso-starter/briefing.md", "espresso-starter/strategy-guide.md",
+                                    "espresso-starter/team-prompt.md"]
     assert "GET /api/board" in z.read("espresso-starter/briefing.md").decode()
+    # the game address is built into bot.py, so a downloaded bot needs no EXCHANGE_URL
+    assert 'os.environ.get("EXCHANGE_URL", "http://testserver")' in z.read("espresso-starter/bot.py").decode()
+    # and the downloaded bot accepts that address: the download must not turn the placeholder check into a false
+    # alarm (it did once: every downloaded bot refused to start)
+    dl = z.read("espresso-starter/bot.py").decode()
+    assert "http://testserver" not in dl.split("def check_brain")[1].split("def decide")[0]
+    # the Claude-plan prompt: the address filled in, the key left for the main page to fill in the browser
+    p = client.get("/starter/ai-prompt.md").text
+    assert "http://testserver/starter/espresso-starter.zip" in p and p.count("<TEAM KEY>") == 1 and "<URL>" not in p
+    assert "==== OUR STRATEGY" in p and ".team_key" in p
     assert client.get("/starter/../server/app.py").status_code == 404
     assert client.get("/static/../app.py").status_code == 404
 
@@ -295,10 +308,12 @@ AI_VARS = ("LLM", "LLM_COMMAND", "LLM_BASE_URL", "LLM_API_KEY", "MODEL", "OLLAMA
            "OPENAI_API_KEY", "GEMINI_API_KEY")
 
 
-def load_bot(monkeypatch, **env):
-    """Import a fresh copy of starter/bot.py with exactly these AI settings."""
+def load_bot(monkeypatch, path_dir="", **env):
+    """Import a fresh copy of starter/bot.py with exactly these AI settings (and no claude command on PATH unless
+    path_dir holds one)."""
     for k in AI_VARS:
         monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("PATH", str(path_dir))
     monkeypatch.setenv("EXCHANGE_URL", "http://unused")
     monkeypatch.setenv("TEAM_KEY", "k")
     for k, v in env.items():
@@ -310,12 +325,8 @@ def load_bot(monkeypatch, **env):
     return bot
 
 
-class FakeReply:
-    def __init__(self, obj):
-        self.obj, self.ok, self.status_code, self.text = obj, True, 200, json.dumps(obj)
-
-    def json(self):
-        return self.obj
+def fake_reply(obj, status=200):
+    return status, obj, json.dumps(obj)
 
 
 def test_starter_bot_works_with_any_ai(monkeypatch, tmp_path):
@@ -327,23 +338,23 @@ def test_starter_bot_works_with_any_ai(monkeypatch, tmp_path):
     # an OpenAI-style API without a model name: the bot lists the models the key can use
     seen = {}
 
-    def get(url, **kw):
-        seen["get"] = (url, kw["headers"])
-        return FakeReply({"data": [{"id": "models/m-small"}, {"id": "m-large"}]})
+    def get(method, url, body=None, headers=None, timeout=40):
+        seen["get"] = (method, url, headers)
+        return fake_reply({"data": [{"id": "models/m-small"}, {"id": "m-large"}]})
 
     bot = load_bot(monkeypatch, LLM_BASE_URL="http://ai.test/v1", LLM_API_KEY="sk-test")
-    monkeypatch.setattr(bot.requests, "get", get)
+    monkeypatch.setattr(bot, "_http", get)
     assert bot.BRAIN == "custom"
     with pytest.raises(SystemExit, match="m-large, m-small"):
         bot.check_brain()
-    assert seen["get"] == ("http://ai.test/v1/models", {"Authorization": "Bearer sk-test"})
+    assert seen["get"] == ("GET", "http://ai.test/v1/models", {"Authorization": "Bearer sk-test"})
     # with a model: one chat call to <address>/chat/completions, carrying the team's AI key
-    def post(url, **kw):
-        seen["post"] = (url, kw["headers"], kw["json"])
-        return FakeReply({"choices": [{"message": {"content": 'ok {"action": "talk", "message": "hi"}'}}]})
+    def post(method, url, body=None, headers=None, timeout=40):
+        seen["post"] = (url, headers, body)
+        return fake_reply({"choices": [{"message": {"content": 'ok {"action": "talk", "message": "hi"}'}}]})
 
     bot = load_bot(monkeypatch, LLM_BASE_URL="http://ai.test/v1/", LLM_API_KEY="sk-test", MODEL="m-small")
-    monkeypatch.setattr(bot.requests, "post", post)
+    monkeypatch.setattr(bot, "_http", post)
     bot.check_brain()
     assert bot.decide({"type": "your_turn", "event_id": "t-1-1"}) == {"action": "talk", "message": "hi"}
     url, headers, body = seen["post"]
@@ -370,3 +381,34 @@ def test_starter_bot_works_with_any_ai(monkeypatch, tmp_path):
     broken.write_text("import sys\nsys.stdin.read()\nsys.exit('not logged in')\n")
     with pytest.raises(ValueError, match="not logged in"):
         load_bot(monkeypatch, LLM_COMMAND=f"{sys.executable} {broken}").ask_llm("s", "u")
+    # a paid Claude plan with no settings at all: the bot finds the claude command and gives it our briefing as
+    # the system prompt, no tools, no MCP servers
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    fake = bindir / "claude"
+    fake.write_text(f"#!{sys.executable}\nimport json, sys\nargs = sys.argv[1:]\nuser = sys.stdin.read()\n"
+                    "sp = args[args.index('--system-prompt') + 1]\n"
+                    "print(json.dumps({'action': 'talk', 'message': '|'.join([args[args.index('--model') + 1], "
+                    "str(args[args.index('--tools') + 1] == ''), str('--strict-mcp-config' in args), "
+                    "str('Agent Briefing' in sp), str('Answer with JSON only' in user)])}))\n")
+    fake.chmod(0o755)
+    bot = load_bot(monkeypatch, path_dir=bindir)
+    assert bot.BRAIN == "claude-plan"
+    bot.check_brain()
+    assert bot.decide({"type": "your_turn", "event_id": "t-1-3"})["message"] == "sonnet|True|True|True|True"
+    # an OpenAI ChatGPT plan through Codex when there is no claude command: the prompt on stdin
+    cdir = tmp_path / "cbin"
+    cdir.mkdir()
+    cx = cdir / "codex"
+    cx.write_text(f"#!{sys.executable}\nimport json, sys\nargs = sys.argv[1:]\nuser = sys.stdin.read()\n"
+                  "print('thinking...')\nprint(json.dumps({'action': 'talk', 'message': '|'.join([args[0], "
+                  "str(args[-1] == '-'), str('Agent Briefing' in user)])}))\n")
+    cx.chmod(0o755)
+    bot = load_bot(monkeypatch, path_dir=cdir)
+    assert bot.BRAIN == "codex-plan"
+    bot.check_brain()
+    assert bot.decide({"type": "your_turn", "event_id": "t-1-4"})["message"] == "exec|True|True"
+    # the game address must be set (it is built in when the kit is downloaded from the game website)
+    monkeypatch.setenv("EXCHANGE_URL", "<URL>")
+    with pytest.raises(SystemExit, match="EXCHANGE_URL"):
+        load_bot(monkeypatch, path_dir=bindir, EXCHANGE_URL="<URL>").check_brain()

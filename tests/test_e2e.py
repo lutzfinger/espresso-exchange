@@ -77,13 +77,29 @@ def export(srv):
     return requests.get(f"{srv.base}/api/host/export", headers=HOST, timeout=10).json()
 
 
-def books(ex):
+def books(ex, coins_start=None, units_start=None):
+    """Coins and items in the market. With start values given, the version 2 flows are taken out first: trade fees
+    and audits leave the game, house orders pay coins in and take items out. The rest must balance exactly."""
     coins = sum(a["coins"] for a in ex["agents"])
     start = sum(a["start_coins"] for a in ex["agents"])
     units = Counter()
     for a in ex["agents"]:
         units.update({k: v for k, v in a["items"].items()})
-    return coins, start, units
+    if coins_start is None:
+        return coins, start, units
+    delta, sold = 0, Counter()
+    for d in ex["deals"]:
+        kind = d.get("kind", "deal")
+        if kind == "deal":
+            delta -= 2 * d.get("fee", 0)
+        elif kind == "contract":
+            delta -= d.get("fee", 0) * len(d["legs"])
+        elif kind == "house_fill":
+            delta += d["price"] * d["qty"] - d.get("fee", 0)
+            sold[d["item"]] += d["qty"]
+    delta -= sum(x["cost"] for x in (ex.get("v2") or {}).get("audits", []))
+    want = Counter({t: units_start[t] - sold[t] for t in units_start})
+    return coins == coins_start + delta and +units == +want
 
 
 @pytest.fixture(scope="module")
@@ -100,7 +116,8 @@ def world(tmp_path_factory):
         shutil.copytree(os.path.join(ROOT, "starter"), d)
         out = open(tmp / f"starter{i}.log", "w")
         env = {k: v for k, v in os.environ.items() if k not in AI_VARS}
-        env.update({"EXCHANGE_URL": srv.base, "TEAM_NAME": f"LLM Bot {i + 1}", "PYTHONUNBUFFERED": "1"})
+        env.update({"EXCHANGE_URL": srv.base, "TEAM_NAME": f"LLM Bot {i + 1}", "PYTHONUNBUFFERED": "1",
+                    "TEAM_MEMBERS": f"Llm {'ABC'[i]} Student, Llm {'ABC'[i]} Partner"})
         llm_url = f"http://127.0.0.1:{llm.port}"
         env.update([  # three ways to give a bot a brain: local model, OpenAI-style API, chat-plan command
             {"OLLAMA_MODEL": "fake", "OLLAMA_URL": llm_url},
@@ -151,8 +168,7 @@ def test_twenty_agents_full_game_with_crash(world):
     mid = export(srv)
     deals_before_crash = len(mid["deals"])
     assert deals_before_crash > 5
-    c, s, u = books(mid)
-    assert c == coins_start and u == units_start, "books unbalanced mid-game"
+    assert books(mid, coins_start, units_start), "books unbalanced mid-game"
 
     # ---- crash and restart mid-game
     srv.kill()
@@ -161,8 +177,7 @@ def test_twenty_agents_full_game_with_crash(world):
     after = export(srv)
     assert after["mode"] == "game", "restart lost the game"
     assert len(after["deals"]) >= deals_before_crash
-    c, s, u = books(after)
-    assert c == coins_start and u == units_start, "books unbalanced after restart"
+    assert books(after, coins_start, units_start), "books unbalanced after restart"
 
     # ---- run to the bell
     deadline = time.time() + 200
@@ -175,8 +190,7 @@ def test_twenty_agents_full_game_with_crash(world):
     time.sleep(6)
 
     fin = export(srv)
-    c, s, u = books(fin)
-    assert c == coins_start and u == units_start, "books unbalanced at the bell"
+    assert books(fin, coins_start, units_start), "books unbalanced at the bell"
     st = fin["final"]["standings"]
     assert len(st) == 20 and [x["rank"] for x in st] == list(range(1, 21))
     assert all(st[i]["wealth"] >= st[i + 1]["wealth"] for i in range(19))

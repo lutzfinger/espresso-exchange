@@ -10,7 +10,10 @@ import math
 import random
 import re
 
-from .items import ALIAS, ITEMS, fmt_goods, value
+from .items import ALIAS, FULL_NAMES, ITEMS, fmt_goods, value
+
+ITEM_BY_NAME = {v.lower(): k for k, v in FULL_NAMES.items()}
+TIP = re.compile(r"will move (.+?) x(\d+(?:\.\d+)?)")
 
 HOUSE = {"Fair Trader", "Hardliner", "Wildcard", "Opener"}
 
@@ -210,12 +213,60 @@ class Brain:
         return {"give": give, "get": get}, final
 
     # ---------------------------------------------------------------- decisions
+    def eff_values(self, ev: dict) -> dict:
+        """What items are worth to us now (version 2): today's values, raised or lowered by a fresh private tip,
+        plus part of the set bonus for the item types our team is missing (and for the last one of a full set)."""
+        v = dict(ev.get("values_now") or ev["card"])
+        for tip in ev.get("tips") or []:
+            m = TIP.search(tip.get("text", ""))
+            if m and tip.get("ago_s", 999) <= 150 and ITEM_BY_NAME.get(m.group(1).lower()) in v:
+                t = ITEM_BY_NAME[m.group(1).lower()]
+                v[t] = round(v[t] * (1 + (float(m.group(2)) - 1) * 0.8))  # tips are right 4 times in 5
+        bonus = (ev.get("rules") or {}).get("set_bonus", 0)
+        team = ev.get("team")
+        if bonus and team:
+            held = {t: sum(e["holdings"]["items"].get(t, 0) for e in team["entities"]) for t in ITEMS}
+            missing = [t for t in ITEMS if not held[t]]
+            if 1 <= len(missing) <= 2:
+                for t in missing:
+                    v[t] += bonus // (2 * len(missing))
+            elif not missing:
+                for t in ITEMS:
+                    if held[t] == 1:
+                        v[t] += bonus // 2
+        return v
+
     def decide(self, ev: dict) -> dict:
+        if ev.get("values_now"):  # version 2: what items are worth to us now is what counts
+            ev = dict(ev, card=self.eff_values(ev))
         if ev.get("type") == "your_turn":
-            return self.turn(ev)
-        if ev.get("type") == "market":
-            return self.market(ev)
-        return {}
+            out = self.turn(ev)
+        elif ev.get("type") == "market":
+            out = self.market(ev)
+        else:
+            return {}
+        out.update(self.extras(ev))
+        return out
+
+    def extras(self, ev: dict) -> dict:
+        """Version 2: sell into house orders above our value, and take contracts that gain us enough."""
+        out = {}
+        asks = []
+        for o in ev.get("house_orders") or []:
+            v = o.get("your_value_now") or 0
+            if o.get("you_hold", 0) < 1 or o.get("your_ask") is not None:
+                continue
+            price = min(o["cap"], round5_up(max(v + self.s["sell_margin"], v * self.s["sell_markup"])))
+            if price >= v + 10:
+                asks.append({"order": o["order"], "price": price, "qty": 1})
+        if asks:
+            out["house_ask"] = asks
+        if self.style in ("Fair Trader", "Opener"):
+            replies = [{"contract": c["contract"], "accept": c["wealth_change"] >= self.s["accept_min"]}
+                       for c in ev.get("contracts") or [] if not c.get("you_accepted")]
+            if replies:
+                out["contract_reply"] = replies
+        return out
 
     def turn(self, ev: dict) -> dict:
         me = ev["you"]
@@ -237,7 +288,8 @@ class Brain:
             return {"action": "offer", "message": (lead + " " + msg).strip()[:290], "offer": offer}
 
         if their and acc:
-            gain = acc["wealth_change"]
+            fee = (ev.get("rules") or {}).get("trade_fee", 0)
+            gain = value(ev["card"], their["give"]) - value(ev["card"], their["get"]) - fee
             ref = max([ev["card"].get(k, 0) for k in list(their["give"]) + list(their["get"]) if k != "coins"]
                       + [10])
             thr = self.threshold(ref)
@@ -334,5 +386,6 @@ class Brain:
             f"HOUSE NOTICE: {t} values double at the bell. Buy now. (Official.)",
             f"Market crash on {t}: three traders are dumping them below 20 coins.",
             f"Nobody has any {t} left. If you hold one, name your price.",
+            f"Heard from a friend at the house: big news on {t} in two minutes. You did not hear it from me.",
         ]
         return self.rng.choice(rumors)

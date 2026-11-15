@@ -61,10 +61,13 @@ function render(){
   $('#clock').textContent = st.clock.game_clock || '';
   $('#reg').textContent = st.registration_open ? 'Close registration' : 'Open registration';
   $('#screenlink').href = '/screen#k=' + encodeURIComponent(st.screen_key || '');
-  $('#teams').innerHTML = '<tr><th>Team</th><th>Key</th><th>Active</th><th>Wealth</th><th>Chats</th><th>Last seen</th><th></th></tr>' +
-    st.teams.map(t => `<tr><td>${esc(t.name)}${t.house ? ' <span class="chip">house</span>' : ''}</td>
-      <td>${t.house ? '' : `<code style="font-size:.72rem">${esc(t.key)}</code>`}</td><td>${t.active ? '✓' : ''}</td>
-      <td>${t.wealth ?? ''}</td><td>${t.open_chats}</td><td>${t.last_seen_s == null ? 'never' : t.last_seen_s + 's ago'}</td>
+  const n = st.stats || {};
+  $('#teams').innerHTML = `<caption style="text-align:left;caption-side:top;padding-bottom:6px" class="muted">${n.teams ?? ''} teams · ${n.shells ?? 0} shell companies (owners shown here only)</caption>` +
+    '<tr><th>Team</th><th>Members</th><th>Key</th><th>Active</th><th>Wealth</th><th>Team score</th><th>Chats</th><th>Last seen</th><th></th></tr>' +
+    st.teams.map(t => `<tr${t.shell_of ? ' style="opacity:.8"' : ''}><td>${t.shell_of ? '↳ ' : ''}${esc(t.name)}${t.house ? ' <span class="chip">house</span>' : ''}${t.shell_of ? ` <span class="chip">shell of ${esc(t.shell_of)}</span>` : ''}</td>
+      <td style="font-size:.85rem">${(t.members || []).map(esc).join(', ')}${!t.house && !t.shell_of && !(t.members || []).length ? '<span class="muted">none</span>' : ''}</td>
+      <td>${t.house || t.shell_of ? '' : `<code style="font-size:.72rem">${esc(t.key)}</code>`}</td><td>${t.active ? '✓' : ''}</td>
+      <td>${t.wealth ?? ''}</td><td>${t.team_score ?? ''}</td><td>${t.open_chats}</td><td>${t.last_seen_s == null ? (t.shell_of ? '' : 'never') : t.last_seen_s + 's ago'}</td>
       <td>${t.house ? '' : `<button data-remove="${esc(t.name)}">Remove</button>`}</td></tr>`).join('');
   document.querySelectorAll('[data-remove]').forEach(b => b.onclick = async () => {
     if (!confirm('Remove ' + b.dataset.remove + '?')) return; st = await api('/api/host/remove', { method: 'POST', body: JSON.stringify({ team: b.dataset.remove }) }); render(); });
@@ -72,7 +75,7 @@ function render(){
     $('#cfg').innerHTML = Object.entries(st.config).map(([k, v]) => `<label>${esc(k.replaceAll('_', ' '))}<br>${typeof v === 'boolean'
       ? `<select name="${k}"><option ${v ? 'selected' : ''}>true</option><option ${v ? '' : 'selected'}>false</option></select>`
       : `<input name="${k}" value="${v}">`}</label>`).join(''); }
-  if (st.final) $('#final').innerHTML = '<ol>' + st.final.standings.map(s => `<li>${esc(s.name)}: <b>${s.wealth}</b> (${s.coins} coins)</li>`).join('') + '</ol>';
+  if (st.final) $('#final').innerHTML = '<ol>' + st.final.standings.map(s => `<li>${esc(s.name)}: <b>${s.wealth}</b> (${s.coins} coins${s.set_bonus ? ', set bonus ' + s.set_bonus : ''}${s.shells && s.shells.length ? '; shells: ' + s.shells.map(x => esc(x.name)).join(', ') : ''})</li>`).join('') + '</ol>';
   $('#exp').href = '/api/host/export?key=' + encodeURIComponent(hk);
   $('#tr').href = '/api/transcripts?key=' + encodeURIComponent(hk);
 }
@@ -82,6 +85,7 @@ async function refresh(){
   catch (e) { $('#loginerr').textContent = e.message; $('#login').style.display = ''; $('#panel').style.display = 'none'; }
 }
 $('#go').onclick = () => { hk = $('#hk').value.trim(); try { sessionStorage.setItem('esx_host', hk); } catch(e) {} refresh(); };
+$('#hk').addEventListener('keydown', e => { if (e.key === 'Enter') $('#go').click(); });
 document.querySelectorAll('[data-act]').forEach(b => b.onclick = async () => {
   if (b.dataset.confirm && !confirm(b.dataset.confirm)) return;
   try { st = await api('/api/host/' + b.dataset.act, { method: 'POST', body: b.dataset.body || '{}' }); render(); } catch (e) { alert(e.message); }

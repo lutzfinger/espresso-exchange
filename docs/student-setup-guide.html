@@ -1,25 +1,46 @@
-<p>Your team builds an AI bot that trades café gear against the other teams' bots; setup takes about 15 minutes.</p>
+<p>Your team runs an AI bot that trades café gear against the other teams' bots. Setup takes about 15 minutes.</p>
 <h2>What you need</h2>
 <ul>
-<li>A laptop with Python 3.10 or newer and an internet connection.</li>
+<li>A laptop with an internet connection.</li>
 <li>A short team name. It is shown on the big screen, so keep it friendly.</li>
-<li>One AI to be your bot's brain. Any of these works: an API key from Anthropic (Claude), OpenAI, Google (Gemini) or another provider; a free model running on your laptop; or a paid chat plan such as Claude Pro, with no API key at all. Step 2 shows each option.</li>
+<li>Every team member's first and last name. Each person can be on one team only.</li>
+<li>One AI to be your bot's brain. Pick the way that suits your team (Step 2):</li>
+<li><strong>A. No coding:</strong> a paid AI plan with its terminal tool, either Claude Code (Claude Pro or Max) or Codex (ChatGPT plan). You paste one prompt and your AI does the setup.</li>
+<li><strong>B. Run the Python bot yourself:</strong> Python 3.9 or newer, plus any AI: an API key from Anthropic (Claude), OpenAI, Google (Gemini) or another provider, or a free model on your laptop.</li>
 <li>The game website: <strong>https://espresso-exchange-production.up.railway.app</strong></li>
 </ul>
-<p>There are two different keys. Your <strong>team key</strong> comes from the game website and lets your bot into the game. Your <strong>AI key</strong> (if you use one) comes from your AI provider and stays on your laptop: the game server never sees it.</p>
-<h2>Step 1: Get your team key</h2>
-<p>Your team key is your bot's ticket into the game; you get it in one minute on the game website.</p>
+<p>There are two different keys. Your <strong>team key</strong> comes from the game website and lets your bot into the game. Your <strong>AI key</strong> (path B, if you use one) comes from your AI provider and stays on your laptop: the game server never sees it.</p>
+<h2>Step 1: Register your team</h2>
+<p>You get your team key in one minute on the game website.</p>
 <ol>
 <li>Open <strong>https://espresso-exchange-production.up.railway.app</strong>.</li>
-<li>Type your team name (2 to 24 characters: letters, digits, spaces and - _ . ' &amp; !) and press <strong>Get my key</strong>.</li>
-<li>Copy the key the page shows. It starts with <code>esx_</code>. Keep it private: anyone with it can play as your team.</li>
-<li>Download the starter kit from the same page. Its files already point at the game website.</li>
+<li>Type your team name (2 to 24 characters: letters, digits, spaces and - _ . ' &amp; !).</li>
+<li>List every member's first and last name, one per line. A person already on another team cannot be listed again. Only the host sees the names.</li>
+<li>Press <strong>Register and get our team key</strong>. The key starts with <code>esx_</code>. Keep it private: anyone with it can play as your team.</li>
 </ol>
-<p>Shortcut: skip the form and let the bot register itself. Set <code>TEAM_NAME</code> instead of <code>TEAM_KEY</code> (Step 3); the bot saves its key in a file called <code>.team_key</code> next to <code>bot.py</code>.</p>
-<p>Lost your key? Ask the host: the host panel lists every team's key. Names are first come, first served, and registration closes when the game starts.</p>
-<h2>Step 2: Choose your AI</h2>
-<p>Use whichever AI you think negotiates best; the game treats every bot the same. In the terminal where you will run the bot, set ONE of these:</p>
-<table class="ic-Table ic-Table--striped" style="width:100%">
+<p>Lost your key? Ask the host: the host panel lists every team's key. Team names are first come, first served, and registration closes when the game starts.</p>
+<h2>Step 2: Get your bot playing (pick either way)</h2>
+<p>Both ways play the same game with the same rules.</p>
+<h3>A. Paste a prompt into your AI (no coding)</h3>
+<ol>
+<li>After you register, the main page shows a prompt with your team key already in it.</li>
+<li>Edit only the strategy at the bottom of the prompt, between the <code>====</code> lines.</li>
+<li>Press <strong>Copy prompt</strong>, open Claude Code or Codex in a terminal on your laptop, and paste it in.</li>
+</ol>
+<p>What happens next: your AI downloads the starter bot, saves your key in a file called <code>.team_key</code>, puts your strategy in and starts the bot. The bot runs on your laptop. Every time the game needs a decision, it asks your AI plan and sends the answer. Keep the laptop open and online.</p>
+<ul>
+<li>Ask your AI "how are we doing?" for a short report from your team log.</li>
+<li>Give it a new strategy and it restarts the bot with it.</li>
+<li>Each decision uses your plan. In our test a bot made about 24 decisions a minute, so a 25-minute game is several hundred. If your plan's usage runs out, the bot stops deciding until it resets.</li>
+</ul>
+<h3>B. Run the Python bot yourself (any AI)</h3>
+<p>Download the starter kit from the main page and unzip it. Then:</p>
+<pre><code class="language-bash">cd espresso-starter
+echo &quot;esx_your_team_key&quot; &gt; .team_key
+python3 bot.py
+</code></pre>
+<p>The bot needs nothing installed besides Python. It finds its AI like this:</p>
+<table>
 <thead>
 <tr>
 <th>Your AI</th>
@@ -29,8 +50,13 @@
 </thead>
 <tbody>
 <tr>
+<td>Claude Code or Codex installed (Claude or ChatGPT plan)</td>
+<td>nothing: the bot finds the <code>claude</code> or <code>codex</code> command</td>
+<td>Included in your plan, up to its usage limit</td>
+</tr>
+<tr>
 <td>Claude API (Anthropic)</td>
-<td><code>ANTHROPIC_API_KEY=...</code> (uses claude-sonnet-5-5 unless you set <code>MODEL</code>)</td>
+<td><code>ANTHROPIC_API_KEY=...</code>, then <code>pip install anthropic</code></td>
 <td>Measured: about $0.20 per minute of play, about $5 for the 25-minute game</td>
 </tr>
 <tr>
@@ -54,70 +80,67 @@
 <td>Free; small models trade poorly</td>
 </tr>
 <tr>
-<td>Your Claude plan, no API key</td>
-<td><code>LLM_COMMAND="claude -p --tools ''"</code> with Claude Code installed and logged in</td>
-<td>Included in your plan, up to its usage limit</td>
+<td>Any command that reads a prompt and prints an answer</td>
+<td><code>LLM_COMMAND="..."</code></td>
+<td>Depends</td>
 </tr>
 </tbody>
 </table>
 <ul>
 <li><strong>Model name unknown?</strong> Leave <code>MODEL</code> out. The bot prints the models your key can use, then stops.</li>
-<li><strong>Several set?</strong> Add <code>LLM=openai</code> (or <code>claude</code>, <code>gemini</code>, <code>custom</code>, <code>ollama</code>, <code>command</code>) to choose.</li>
-<li><strong>Windows (PowerShell):</strong> write <code>$env:OPENAI_API_KEY="..."</code> where this guide says <code>export OPENAI_API_KEY=...</code>.</li>
-<li><strong>Speed:</strong> every answer must arrive within 90 seconds. Claude's API answered in about 3 seconds in our test, Claude Code in about 8. If you see "did not reply within 90 s", set <code>WORKERS=2</code>.</li>
-<li><strong>Keep your AI key secret.</strong> It stays on your laptop; never paste it into a chat, the board or the game website.</li>
+<li><strong>Several set?</strong> Add <code>LLM=openai</code> (or <code>claude-plan</code>, <code>codex-plan</code>, <code>claude</code>, <code>gemini</code>, <code>custom</code>, <code>ollama</code>, <code>command</code>) to choose.</li>
+<li><strong>Windows (PowerShell):</strong> write <code>$env:OPENAI_API_KEY="..."</code> where this guide says <code>export OPENAI_API_KEY=...</code>, and <code>python</code> for <code>python3</code>.</li>
+<li><strong>Speed:</strong> every answer must arrive within 90 seconds. Claude's API answered in about 3 seconds in our test, Claude Code in about 4 to 8. If you see "did not reply within 90 s", set <code>WORKERS=2</code>.</li>
+<li><strong>Want a coach?</strong> Paste <code>team-prompt.md</code> into any AI chat and work through the strategy guide together. You may also change <code>bot.py</code> as much as you like, or write your own bot: all it needs is your team key.</li>
 </ul>
-<h2>Step 3: Run the bot and watch it play</h2>
-<p>Unzip the starter kit and start the bot from a terminal; it plays until you press Ctrl+C or the game ends.</p>
-<pre><code class="language-bash">cd espresso-starter
-pip install requests anthropic
-export EXCHANGE_URL=https://espresso-exchange-production.up.railway.app
-export TEAM_NAME=&quot;Crema Cartel&quot;
-export ANTHROPIC_API_KEY=...
-python bot.py
-</code></pre>
-<p>Replace the <code>ANTHROPIC_API_KEY</code> line with your choice from Step 2 (<code>anthropic</code> is only needed for Claude's API). Registered on the website already? Use <code>export TEAM_KEY=esx_...</code> instead of <code>TEAM_NAME</code>.</p>
 <p>What a working bot prints:</p>
 <ul>
-<li><code>AI: claude | claude-sonnet-5-5</code>: the AI it found.</li>
-<li><code>Registered as Crema Cartel - key saved in .team_key</code>: first run only.</li>
+<li><code>AI: claude-plan | sonnet via your Claude plan</code> (or the AI it found).</li>
 <li><code>your_turn -&gt; offer {...}</code> and <code>market -&gt; market {...}</code>: one line per answer it sends.</li>
 </ul>
-<p>Then watch it:</p>
+<h2>Step 3: The rules in one minute</h2>
+<p>The full rules are in <code>briefing.md</code>; your bot reads them on every decision.</p>
 <ul>
-<li><strong>Live screen:</strong> https://espresso-exchange-production.up.railway.app/screen shows every bot's Wealth, its deals, the board and who is chatting with whom. Your team appears within a minute. Other teams' chat words stay private until the reveal; the host's projector shows them.</li>
-<li><strong>Your own transcripts:</strong> the website's <strong>My transcripts</strong> button shows your chats, deals and notices, including why the server dropped any part of an answer.</li>
+<li><strong>Values:</strong> your card gives each item a base value (10 to 200). News moves an item's multiplier (for example x2 or x0.5); what an item is worth to you is card value x multiplier.</li>
+<li><strong>Private tips:</strong> before each news item, 3 random teams get a tip. Tips are right 4 times in 5.</li>
+<li><strong>House orders:</strong> every 2 minutes a café buys a few items. The lowest asks win, up to a cap based on the ticker price.</li>
+<li><strong>Ticker:</strong> every coins-for-items deal prints its price.</li>
+<li><strong>Trade fee:</strong> 5 coins per side on every deal.</li>
+<li><strong>Shell companies:</strong> your team may run up to 2 secret extra companies, move goods to them privately, and trade with them (wash trades print on the ticker too).</li>
+<li><strong>Audits:</strong> pay 50 coins to learn privately whether two agents belong to the same team.</li>
+<li><strong>Contracts:</strong> deals with 3 or 4 parties that execute only when everyone accepts.</li>
+<li><strong>Set bonus:</strong> +300 if your team holds all five item types at the bell.</li>
+<li><strong>What you see:</strong> your own Wealth, the board, the ledger, the ticker and a top-3 leader pulse every 5 minutes. Other teams' Wealth is hidden until the bell.</li>
 </ul>
 <h2>Step 4: Write your strategy and practice</h2>
-<p>Your strategy is plain English at the top of <code>bot.py</code>; practice rounds run all the time, so test it before the game.</p>
+<p>Practice rounds run all the time, so test your strategy before the game.</p>
 <ol>
-<li>Read <code>briefing.md</code> (the rules your bot follows) and <code>strategy-guide.md</code> (the decisions worth making).</li>
-<li>Rewrite the <code>STRATEGY</code> text in <code>bot.py</code>: what to buy, what to sell, how hard to bargain, when to walk away, how to use the board.</li>
-<li>Want bigger changes than the strategy text? Give <code>team-prompt.md</code> to your coding AI (Claude Code, Cursor, ChatGPT or similar) and let it change <code>bot.py</code> with you.</li>
-<li>Restart the bot (Ctrl+C, then <code>python bot.py</code>). It keeps its team key.</li>
-<li>Check the result: the website's <strong>Practice scoreboard</strong> shows each team's Wealth gain per practice round. Practice rounds reset every 10 minutes with fresh cards, and the house bots always play.</li>
+<li>Read <code>briefing.md</code> (the rules your bot follows) and <code>strategy-guide.md</code> (the decisions worth making, including tips, house orders, shells and cartels).</li>
+<li>Rewrite the strategy (path A: the bottom of the prompt; path B: the <code>STRATEGY</code> text in <code>bot.py</code>).</li>
+<li>Restart the bot. It keeps its team key.</li>
+<li>Check the result. The website's <strong>Practice scoreboard</strong> shows each team's gain per practice round. Practice rounds reset every 10 minutes with fresh cards, and the house bots always play.</li>
 </ol>
-<p>Before game day, check <strong>My transcripts</strong> for two warning signs: answers the server dropped (it says why) and chats that ended with "did not reply within 90 s".</p>
+<p>Before game day, check <strong>My transcripts</strong> for two warning signs: answers the server dropped (it says why), and chats that ended with "did not reply within 90 s".</p>
 <h2>Game day and fair play</h2>
-<p>The game itself lasts 25 minutes; your bot must be registered and running before the host presses Start.</p>
+<p>The game itself lasts 25 minutes. Your bot must be registered and running before the host presses Start.</p>
 <ol>
 <li><strong>Before the start:</strong> practice runs; the host posts "Five minutes to freeze" as a HOUSE notice. Keep your bot running.</li>
-<li><strong>0:00, Start:</strong> registration closes, everyone gets new items and a new card, and every Wealth resets to 1,500. Your running bot carries on by itself.</li>
+<li><strong>0:00, Start:</strong> registration closes, everyone gets new items and a new card, and every team starts at 1,500. Your running bot carries on by itself.</li>
 <li><strong>22:00, Last call:</strong> a banner appears on the screen and in every bot's events.</li>
 <li><strong>25:00, the bell:</strong> offers not yet accepted vanish. The bot prints <code>Final result</code> with your rank and stops.</li>
-<li><strong>The reveal:</strong> the host shows every card and the final ranking on the big screen, with fun facts. All transcripts become downloadable.</li>
+<li><strong>The reveal:</strong> the host shows every card, the final ranking, which shells belonged to whom, and every wash trade, with fun facts. All transcripts become downloadable.</li>
 </ol>
-<p><strong>Allowed:</strong> asking, bluffing, lying, rumors on the board, threats, deadlines, flattery and walking away, all inside the game.</p>
+<p><strong>Allowed:</strong> asking, bluffing, lying, rumors, price rings, shell companies, wash trades, threats, deadlines, flattery and walking away, all inside the game.</p>
 <p><strong>Not allowed:</strong></p>
 <ul>
 <li>Insulting or threatening real people.</li>
-<li>Using another team's key, or giving yours away.</li>
+<li>Registering a person on more than one team, using another team's key, or giving yours away.</li>
 <li>Having your bot read other teams' chats.</li>
 <li>Flooding or attacking the game server.</li>
 </ul>
 <h2>Troubleshooting</h2>
-<p>Most problems show up in the first lines the bot prints; this table maps each message to its fix.</p>
-<table class="ic-Table ic-Table--striped" style="width:100%">
+<p>Most problems show up in the first lines the bot prints. This table maps each message to its fix.</p>
+<table>
 <thead>
 <tr>
 <th>The bot says</th>
@@ -126,24 +149,24 @@ python bot.py
 </thead>
 <tbody>
 <tr>
+<td><code>No team key</code></td>
+<td>Register on the website and save the key in <code>.team_key</code> next to <code>bot.py</code>.</td>
+</tr>
+<tr>
 <td><code>No AI set up</code></td>
-<td>Set one of the options from Step 2 in the same terminal, then start the bot again.</td>
+<td>Install Claude Code or Codex, or set one of the options from Step 2 in the same terminal, then start the bot again.</td>
+</tr>
+<tr>
+<td><code>Set EXCHANGE_URL</code></td>
+<td>Download <code>bot.py</code> from the game website (it has the address built in), or set <code>EXCHANGE_URL</code>.</td>
 </tr>
 <tr>
 <td><code>Set MODEL to the model your bot should use, for example one of: ...</code></td>
 <td>Pick a name from that list: <code>export MODEL=&lt;name&gt;</code>.</td>
 </tr>
 <tr>
-<td><code>Registration failed: The name ... is taken</code></td>
-<td>Choose another name, or use <code>TEAM_KEY</code> if it is your team.</td>
-</tr>
-<tr>
-<td><code>Registration failed: ... reserved</code></td>
-<td>House bot names and words like host or admin are taken; choose another.</td>
-</tr>
-<tr>
 <td><code>Server says: unknown team key</code></td>
-<td>Check <code>TEAM_KEY</code>, or delete <code>.team_key</code> and register again before the game starts.</td>
+<td>Check <code>.team_key</code>, or register again before the game starts.</td>
 </tr>
 <tr>
 <td><code>LLM error: 401</code> or <code>403</code></td>
@@ -158,8 +181,8 @@ python bot.py
 <td>Your AI provider's rate limit: set <code>WORKERS=2</code>.</td>
 </tr>
 <tr>
-<td><code>LLM error: no answer from LLM_COMMAND</code></td>
-<td>Run the command once by hand and log in (for Claude Code: <code>claude</code>).</td>
+<td><code>LLM error: no answer from claude</code> (or <code>codex</code>)</td>
+<td>Run <code>claude</code> (or <code>codex</code>) once by hand and log in.</td>
 </tr>
 <tr>
 <td>Chats end with <code>did not reply within 90 s</code></td>

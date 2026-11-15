@@ -35,6 +35,14 @@ Open chats with three agents who posted about items you want. Accept any offer w
     ("Grind Lord", "qwen2.5:7b", """
 You are a rumor monger. Post one fake rumor per minute that makes items you sell look scarce.
 Lie about what you hold. Sell items worth 10-30 to you for at least 60. Accept only if wealth_change > 0.
+On your first market event create one shell company and transfer it 300 coins. Then trade one cheap item
+back and forth between your main agent and your shell at high prices to pump the ticker, and sell that item
+into house orders just below the cap.
+"""),
+    ("Tip Hunter", "qwen2.5:7b", """
+Always check tips and news first. After a private tip, buy the tipped item before good news and sell it
+before bad news. Sell items whose value_now is below a house order cap into that order (house_ask a little
+below the cap). If two agents trade the same item at odd prices again and again, audit them and post the result.
 """),
     ("Tiny Brew", "llama3.2:1b", None),  # weak model, default starter strategy
 ]
@@ -73,7 +81,9 @@ def run(args):
         srv.start()
         base, hk = srv.base, {"X-Host-Key": "e2e-host"}
     requests.post(f"{base}/api/host/config", headers=hk, json={"game_minutes": args.game,
-                  "last_call_minutes": max(0.5, args.game - 1), "house_in_game": True}, timeout=10)
+                  "last_call_minutes": max(0.5, args.game - 1), "house_in_game": True, "tip_lead_s": 40,
+                  "house_order_first_s": 30, "house_order_every_s": 60, "house_order_window_s": 40,
+                  "pulse_every_s": 90}, timeout=10)
     procs = []
     global LLM_BOTS
     LLM_BOTS = [(args.prefix + n + (f" {c + 1}" if args.copies > 1 else ""), args.claude or mdl, st)
@@ -87,8 +97,9 @@ def run(args):
             start = src.index('STRATEGY = """') + len('STRATEGY = """')
             end = src.index('"""', start)
             (d / "bot.py").write_text(src[:start] + strategy + src[end:])
+        tag = "".join(chr(97 + ord(ch) // 26 % 26) + chr(97 + ord(ch) % 26) for ch in name).title()
         env = {**os.environ, "EXCHANGE_URL": base, "TEAM_NAME": name, "OLLAMA_MODEL": model, "PYTHONUNBUFFERED": "1",
-               "WORKERS": str(args.workers)}
+               "WORKERS": str(args.workers), "TEAM_MEMBERS": f"Dry {tag} Runner"}
         env.pop("TEAM_KEY", None)
         if args.claude:  # Claude bot: no Ollama, and log tokens + latency of every call (test copy only)
             env.pop("OLLAMA_MODEL")
@@ -144,6 +155,19 @@ def run(args):
             "wealth": standings.get(name, {}).get("wealth"), "exited_on_bell": p.poll() == 0,
             "llm_error_samples": sorted({ln.strip()[:160] for ln in out.splitlines() if "LLM error" in ln})[:3],
             "claude_usage": usage_report(out, report_model(name))}
+    v2 = ex.get("v2") or {}
+    owner = {s: n["team"] for n in v2.get("shell_network", []) for s in n["shells"]}
+    team = lambda x: owner.get(x, x)  # noqa: E731
+    for name in report["bots"]:
+        report["bots"][name]["v2"] = {
+            "shells": [s for s, t in owner.items() if t == name],
+            "house_asks": sum(1 for o in v2.get("house_orders", []) for a in o["asks"] if team(a) == name),
+            "house_fills": sum(1 for x in ex["deals"] if x.get("kind") == "house_fill" and team(x["a"]) == name),
+            "transfers": sum(1 for x in v2.get("transfers", []) if team(x["from"]) == name),
+            "audits": sum(1 for x in v2.get("audits", []) if team(x["by"]) == name),
+            "contracts": sum(1 for x in v2.get("contracts", []) if team(x["proposer"]) == name),
+            "wash_trades": sum(1 for x in ex["deals"] if x.get("kind") == "deal" and team(x["a"]) == team(x["b"]) == name)}
+    report["house_fills_total"] = sum(1 for x in ex["deals"] if x.get("kind") == "house_fill")
     report["winner"] = (ex["final"] or {}).get("standings", [{}])[0].get("name")
     costs = [b["claude_usage"]["cost_usd"] for b in report["bots"].values() if (b["claude_usage"] or {}).get("cost_usd")]
     if costs:
@@ -167,7 +191,7 @@ def run(args):
         if p.poll() is None:
             p.terminate()
     if srv:
-        srv.stop()
+        srv.kill()
     (tmp / "report.json").write_text(json.dumps(report, indent=1))
 
 
