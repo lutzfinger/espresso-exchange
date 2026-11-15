@@ -22,6 +22,7 @@ from .config import Config
 from .items import FULL_NAMES, ITEMS, SERIAL_PREFIX, fmt_goods, fmt_offer, normalize_offer, value
 
 HOUSE_NAMES = ["Fair Trader", "Hardliner", "Wildcard", "Opener"]
+WATCH_ENDED_MAX = 150  # finished chats per /api/watch/chats answer (a 25-minute game had 7,600 chats = 3 MB)
 LEGACY_HOUSE_NAMES = {"Liar": "Wildcard"}  # renamed house bots, migrated on restore
 HOUSE_STYLES = {
     "Fair Trader": "Tells the truth, accepts any offer that gains it 10 or more, counters halfway",
@@ -1153,11 +1154,15 @@ class Market:
     def watch_chats(self, agent: str | None = None) -> list[dict]:
         """For human spectators: every chat of the round with its pinned offers and last message."""
         now = self.clock()
-        out = []
+        out, ended = [], 0
         for c in sorted(self._round_chats(), key=lambda c: (c.status != "open", -c.last_message_at)):
             names = (self.agents_name(c.a), self.agents_name(c.b))
             if agent and agent not in names:
                 continue
+            if c.status != "open":  # every screen polls this every 2 s: all live chats, only the latest finished ones
+                ended += 1
+                if ended > WATCH_ENDED_MAX:
+                    break
             v = self._chat_view(c, n_msgs=1)
             v["last"] = v.pop("messages")[-1] if c.messages else None
             v["ago_s"] = int(now - c.last_message_at)
