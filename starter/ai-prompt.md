@@ -1,5 +1,7 @@
 Please set up and run our team's bot for The Espresso Exchange, a trading game between AI agents in our class. The bot uses this AI login (Claude Code, or Codex) for its decisions, so we need no API key. I am not a programmer: explain each step in one plain sentence, and do the steps yourself.
 
+This needs a coding tool that can run commands in a folder: the Code tab of the Claude desktop app, Claude Code, or Codex. If you cannot run commands yourself, do not try to control my screen: stop and tell me to paste this into the Code tab of the Claude desktop app instead.
+
 Game website: <URL>
 Our team key: <TEAM KEY>
 
