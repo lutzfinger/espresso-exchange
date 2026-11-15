@@ -20,7 +20,9 @@
 # Several AI settings at once? export LLM=claude-plan|codex-plan|claude|openai|gemini|custom|ollama|command picks one.
 # No key yet? export TEAM_NAME="Crema Cartel" TEAM_MEMBERS="Ana Lopez, Ben Wu" and the first run registers you.
 # The game address is built in when you download this file; EXCHANGE_URL overrides it.
-import json, os, shlex, shutil, subprocess, threading, time, urllib.error, urllib.request
+import json, os, shlex, shutil, subprocess, sys, threading, time, urllib.error, urllib.request
+
+sys.stdout.reconfigure(line_buffering=True)     # bot.log fills line by line, even when it runs in the background
 
 SERVER = os.environ.get("EXCHANGE_URL", "<URL>").rstrip("/")
 HERE = os.path.dirname(os.path.abspath(__file__))

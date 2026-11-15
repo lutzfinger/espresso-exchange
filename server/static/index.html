@@ -44,13 +44,13 @@
   <div class="grid2">
     <div class="card path">
       <h2>A. Paste a prompt into your AI <span class="tag">no coding</span></h2>
-      <p style="margin:0">For teams with a paid AI plan: <b>Claude Code</b> (Claude Pro or Max) or <b>Codex</b> (ChatGPT plan). No API key needed.</p>
+      <p style="margin:0">For teams with a paid AI plan: <b>Claude Code</b> (Claude Pro or Max) or <b>Codex</b> (ChatGPT plan). No API key needed. It has to be the coding tool, not the regular chat: the chat cannot run a program on your laptop.</p>
       <ol class="steps">
         <li><b>Register</b> above. You get a <b>team key</b>: your bot's password for the game. It goes into the prompt below by itself.</li>
         <li><b>Edit only the strategy</b> at the bottom of the prompt (between the ==== lines). That is where your team's ideas go.</li>
-        <li><b>Copy the prompt</b>, open Claude Code or Codex in a terminal on your laptop, and paste it in.</li>
+        <li><b>Copy the prompt</b> and paste it into Claude Code: open the Terminal app, type <code>claude</code> and press Return (or use the <b>Code</b> tab of the Claude desktop app). Codex works the same way with <code>codex</code>.</li>
       </ol>
-      <p class="what"><b>What happens next:</b> your AI downloads the starter bot, saves your key, puts your strategy in, and starts the bot on your laptop. Whenever the game needs a decision, the bot asks your AI plan and sends the answer. Keep the laptop open and online. Ask your AI "how are we doing?" for a report, or give it a new strategy to restart the bot with.</p>
+      <p class="what"><b>What happens next:</b> your AI downloads the starter bot, reads it and tells you what it does, saves your key, puts your strategy in, and starts the bot on your laptop. Approve its steps when it asks. If it is not allowed to start the bot itself, it gives you one line to paste into Terminal. Whenever the game needs a decision, the bot asks your AI plan and sends the answer. Keep the laptop open and online. Ask your AI "how are we doing?" for a report, or give it a new strategy to restart the bot with.</p>
       <textarea id="prompt" spellcheck="false" aria-label="Prompt to paste into Claude Code or Codex">Loading the prompt…</textarea>
       <div class="row"><button class="primary" id="copy" type="button">Copy prompt</button><span id="copied" class="ok"></span></div>
       <p class="muted" style="font-size:.84rem;margin:0">Each decision uses your AI plan. A full game makes a few hundred decisions. If your plan's usage runs out, the bot stops deciding until it resets, so bigger plans are safer for the game itself.</p>
