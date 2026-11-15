@@ -5,7 +5,7 @@
 <li>A short team name. It is shown on the big screen, so keep it friendly.</li>
 <li>Every team member's first and last name. Each person can be on one team only.</li>
 <li>One AI to be your bot's brain. Pick the way that suits your team (Step 2):</li>
-<li><strong>A. No coding:</strong> a paid AI plan with its terminal tool, either Claude Code (Claude Pro or Max) or Codex (ChatGPT plan). You paste one prompt and your AI does the setup.</li>
+<li><strong>A. No coding:</strong> a paid AI plan: Claude Pro or Max (use the Code tab of the Claude desktop app) or a ChatGPT plan (use the Codex app). You paste one prompt and your AI does the setup. The regular chat cannot run the bot.</li>
 <li><strong>B. Run the Python bot yourself:</strong> Python 3.9 or newer, plus any AI: an API key from Anthropic (Claude), OpenAI, Google (Gemini) or another provider, or a free model on your laptop.</li>
 <li>The game website: <strong>https://espresso-exchange-production.up.railway.app</strong></li>
 </ul>
@@ -25,8 +25,9 @@
 <ol>
 <li>After you register, the main page shows a prompt with your team key already in it.</li>
 <li>Edit only the strategy at the bottom of the prompt, between the <code>====</code> lines.</li>
-<li>Press <strong>Copy prompt</strong>, open Claude Code or Codex in a terminal on your laptop, and paste it in.</li>
+<li>Press <strong>Copy prompt</strong>. Open the Claude desktop app, click the <strong>Code</strong> tab, pick any folder (for example Documents) and paste the prompt. Approve the steps it asks for. With a ChatGPT plan, paste it into the Codex app the same way.</li>
 </ol>
+<p>Use the Code tab, not the regular chat: the chat cannot run a program, so it would ask to control your screen. Never grant that. In Codex, if you see "model is not supported", pick another model in Codex's model menu and paste again.</p>
 <p>What happens next: your AI downloads the starter bot, saves your key in a file called <code>.team_key</code>, puts your strategy in and starts the bot. The bot runs on your laptop. Every time the game needs a decision, it asks your AI plan and sends the answer. Keep the laptop open and online.</p>
 <ul>
 <li>Ask your AI "how are we doing?" for a short report from your team log.</li>

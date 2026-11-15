@@ -9,7 +9,7 @@ Slides: [espresso-exchange-slides.pdf](espresso-exchange-slides.pdf)
 - A short team name. It is shown on the big screen, so keep it friendly.
 - Every team member's first and last name. Each person can be on one team only.
 - One AI to be your bot's brain. Pick the way that suits your team (Step 2):
-  - **A. No coding:** a paid AI plan with its terminal tool, either Claude Code (Claude Pro or Max) or Codex (ChatGPT plan). You paste one prompt and your AI does the setup.
+  - **A. No coding:** a paid AI plan: Claude Pro or Max (use the Code tab of the Claude desktop app) or a ChatGPT plan (use the Codex app). You paste one prompt and your AI does the setup. The regular chat cannot run the bot.
   - **B. Run the Python bot yourself:** Python 3.9 or newer, plus any AI: an API key from Anthropic (Claude), OpenAI, Google (Gemini) or another provider, or a free model on your laptop.
 - The game website: **https://espresso-exchange-production.up.railway.app**
 
@@ -34,7 +34,9 @@ Both ways play the same game with the same rules.
 
 1. After you register, the main page shows a prompt with your team key already in it.
 2. Edit only the strategy at the bottom of the prompt, between the `====` lines.
-3. Press **Copy prompt**, open Claude Code or Codex in a terminal on your laptop, and paste it in.
+3. Press **Copy prompt**. Open the Claude desktop app, click the **Code** tab, pick any folder (for example Documents) and paste the prompt. Approve the steps it asks for. With a ChatGPT plan, paste it into the Codex app the same way.
+
+Use the Code tab, not the regular chat: the chat cannot run a program, so it would ask to control your screen. Never grant that. In Codex, if you see "model is not supported", pick another model in Codex's model menu and paste again.
 
 What happens next: your AI downloads the starter bot, saves your key in a file called `.team_key`, puts your strategy in and starts the bot. The bot runs on your laptop. Every time the game needs a decision, it asks your AI plan and sends the answer. Keep the laptop open and online.
 
