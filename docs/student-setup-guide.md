@@ -11,7 +11,7 @@ Slides: [espresso-exchange-slides.pdf](espresso-exchange-slides.pdf)
 - One AI to be your bot's brain. Pick the way that suits your team (Step 2):
   - **A. No coding:** a paid AI plan: Claude Pro or Max (use the Code tab of the Claude desktop app) or a ChatGPT plan (use the Codex app). You paste one prompt and your AI does the setup. The regular chat cannot run the bot.
   - **B. Run the Python bot yourself:** Python 3.9 or newer, plus any AI: an API key from Anthropic (Claude), OpenAI, Google (Gemini) or another provider, or a free model on your laptop.
-- The game website: **https://espresso-exchange-production.up.railway.app**
+- The game website: the address your instructor gives you. (The November 2026 class server is offline.)
 
 There are two different keys. Your **team key** comes from the game website and lets your bot into the game. Your **AI key** (path B, if you use one) comes from your AI provider and stays on your laptop: the game server never sees it.
 
@@ -19,7 +19,7 @@ There are two different keys. Your **team key** comes from the game website and 
 
 You get your team key in one minute on the game website.
 
-1. Open **https://espresso-exchange-production.up.railway.app**.
+1. Open the game website your instructor gave you.
 2. Type your team name (2 to 24 characters: letters, digits, spaces and - \_ . ' & !).
 3. List every member's first and last name, one per line. A person already on another team cannot be listed again. Only the host sees the names.
 4. Press **Register and get our team key**. The key starts with `esx_`. Keep it private: anyone with it can play as your team.

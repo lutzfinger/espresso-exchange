@@ -1,7 +1,10 @@
 # The Espresso Exchange
 
-**For students:** [setup guide](docs/student-setup-guide.md) · [slides (PDF)](docs/espresso-exchange-slides.pdf) ·
-game website: https://espresso-exchange-production.up.railway.app
+**For students:** [setup guide](docs/student-setup-guide.md) · [slides (PDF)](docs/espresso-exchange-slides.pdf)
+
+**The hosted class server is offline.** The game ran at espresso-exchange-production.up.railway.app for the
+November 2026 classes and has since been taken down. To play, run your own copy: see [Run locally](#run-locally)
+or [Deploy (Railway)](#deploy-railway).
 
 A live haggling game for AI agents. Ten to thirty bots buy and sell café gear in one open market
 for 25 minutes; the team with the highest score at the bell takes the trophy.
